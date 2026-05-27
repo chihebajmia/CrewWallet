@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Crew Wallet">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
+    <title>Crew Wallet Master V38</title>
+    <style>
+        :root { --bg-color: #0f172a; --card-bg: #1e293b; --accent: #fbbf24; --text: #f8fafc; --text-muted: #94a3b8; --success: #4ade80; --warning: #facc15; --danger: #f87171; --panel-border: #334155; --vault-bg: rgba(15, 23, 42, 0.5); }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; -webkit-tap-highlight-color: transparent; padding-bottom: 90px; }
+        .app-container { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 14px; }
+        .page-section { display: none; flex-direction: column; gap: 14px; animation: fadeIn 0.3s ease; } 
+        .page-section.active { display: flex; }
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--card-bg); border-top: 1px solid var(--panel-border); display: flex; justify-content: space-around; padding: 10px 0; padding-bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 50; }
+        .nav-btn { background: none; border: none; color: var(--text-muted); font-size: 10px; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; flex: 1; transition: color 0.2s, transform 0.1s;}
+        .nav-btn.active { color: var(--accent); transform: scale(1.05); } 
+        .nav-icon { font-size: 22px; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .nav-btn.active .nav-icon { transform: translateY(-3px); }
+        .vault-card { background-color: var(--card-bg); border-radius: 16px; padding: 16px; border: 1px solid var(--panel-border); transition: transform 0.1s ease-out;}
+        .vault-card.clickable:active { transform: scale(0.97); border-color: var(--accent); }
+        .vault-header { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 12px; text-align: center; display: flex; justify-content: space-between; align-items: center;}
+        .vault-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .vault-item { background-color: var(--vault-bg); padding: 10px 4px; border-radius: 10px; text-align: center; border: 1px solid var(--panel-border); position: relative; cursor: pointer; transition: transform 0.1s;}
+        .vault-item:active { transform: scale(0.95); }
+        .v-lbl { font-size: 9px; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: bold;}
+        .v-val { font-size: 13px; font-weight: 800; color: var(--text); } 
+        .v-sub { font-size: 8px; color: var(--danger); margin-top: 2px; }
+        .vault-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
+        .v-btn { background-color: #334155; color: white; border: none; border-radius: 8px; padding: 10px 4px; font-size: 10px; font-weight: bold; cursor: pointer; transition: transform 0.1s ease, filter 0.1s ease; } 
+        .v-btn:active { filter: brightness(1.2); transform: scale(0.95); }
+        .scoreboard-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .score-box { background-color: var(--card-bg); border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px; text-align: center; cursor: pointer; transition: transform 0.1s ease;}
+        .score-box:active { transform: scale(0.95); }
+        .score-num { font-size: 18px; font-weight: 800; margin-top: 2px; } 
+        .score-box.green-box .score-num { color: var(--success); } 
+        .score-box.red-box .score-num { color: var(--danger); }
+        .balance-card { background-color: var(--card-bg); border-radius: 16px; padding: 18px 20px; text-align: center; border: 1px solid var(--panel-border); position: relative;}
+        .title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 6px; display:flex; justify-content:space-between; align-items:center;}
+        .balance { font-size: 34px; font-weight: 800; margin: 0; color: var(--success); transition: color 0.3s ease; }
+        .surplus-badge { position: absolute; top: 12px; right: 12px; font-size: 10px; font-weight: bold; padding: 4px 8px; border-radius: 8px; background: rgba(74, 222, 128, 0.1); color: var(--success); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .progress-container { width: 100%; background-color: #334155; height: 6px; border-radius: 3px; margin-top: 12px; overflow: hidden; }
+        .progress-bar { height: 100%; width: 100%; background-color: var(--success); transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+        .form-panel { background-color: var(--card-bg); border-radius: 16px; padding: 14px; border: 1px solid var(--panel-border); display: flex; flex-direction: column; gap: 10px; }
+        .input-row { display: flex; gap: 8px; align-items: center; }
+        
+        input, select { background-color: #0f172a; border: 1px solid var(--panel-border); border-radius: 10px; padding: 12px; color: var(--text); font-size: 14px; outline: none; box-sizing: border-box; width: 100%; -webkit-appearance: none; transition: border-color 0.2s ease;}
+        input[type="checkbox"] { -webkit-appearance: auto; width: 20px; height: 20px; padding: 0; margin: 0; cursor: pointer; }
+        input:focus, select:focus { border-color: var(--accent); }
+        
+        .flex-main { flex: 2; width: 50%; } 
+        .flex-side { flex: 1; width: 25%; text-align: center; }
+        .btn-action { background-color: var(--accent); color: #0f172a; border: none; border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform 0.1s ease, filter 0.1s ease; }
+        .btn-action:active { transform: scale(0.95); filter: brightness(0.9); }
+        .expand-btn { background: none; border: 1px solid var(--panel-border); color: var(--text-muted); border-radius: 10px; padding: 12px; cursor: pointer; font-size: 14px; transition: background-color 0.2s; }
+        .advanced-context-box { display: none; flex-direction: column; gap: 8px; background-color: var(--vault-bg); padding: 12px; border-radius: 10px; border: 1px dashed var(--panel-border); animation: fadeIn 0.2s ease; }
+        .history-card { background-color: var(--card-bg); border-radius: 16px; padding: 16px; max-height: 280px; overflow-y: auto; border: 1px solid var(--panel-border); }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--panel-border); font-size: 13px; animation: slideInLeft 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);} 
+        .history-item:last-child { border-bottom: none; }
+        .history-details { font-size: 10px; color: var(--text-muted); margin-top: 4px; line-height: 1.3; }
+        .edit-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0 4px; font-size: 14px; transition: transform 0.1s; } 
+        .edit-btn:active { transform: scale(0.7); }
+        .cat-badge { background: #334155; color: white; padding: 2px 6px; border-radius: 4px; font-size: 8px; margin-left: 6px; vertical-align: middle; }
+        .project-badge { font-size:9px; color:var(--accent); display:block; margin-top:2px; font-weight:bold; }
+        .chart-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; margin: 6px 0; }
+        .chart-bar-bg { flex: 1; background-color: #0f172a; height: 6px; border-radius: 3px; margin: 0 8px; overflow: hidden; }
+        .chart-bar-fill { background-color: var(--accent); height: 100%; width: 0%; transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+        .btn-secondary { background-color: var(--card-bg); color: var(--text-muted); border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 5px; transition: transform 0.1s ease;}
+        .btn-secondary:active { transform: scale(0.98); }
+        .iou-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: var(--vault-bg); border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--panel-border); animation: fadeIn 0.3s ease; }
+        .iou-btn { background: var(--accent); color: #000; border: none; border-radius: 6px; padding: 6px 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
+        .iou-btn:active { transform: scale(0.9); }
+        
+        .scrollable-list { max-height: 200px; overflow-y: auto; padding-right: 5px; }
+        .scrollable-list::-webkit-scrollbar { width: 4px; }
+        .scrollable-list::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 4px; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; backdrop-filter: blur(5px); animation: fadeIn 0.2s ease;}
+        .modal-overlay.high-z { z-index: 200; }
+        .modal-content { background-color: var(--card-bg); border-radius: 16px; padding: 20px; width: 100%; max-width: 350px; border: 1px solid var(--panel-border); max-height: 85vh; overflow-y: auto; animation: slideUpModal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;}
+        .modal-input-group { display: flex; flex-direction: column; gap: 4px; }
+        .modal-input-group label { font-size: 10px; color: var(--text-muted); font-weight: bold;}
+        .modal-btn-row { display: flex; gap: 10px; margin-top: 20px; }
+        .b-stat { background: var(--vault-bg); padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid var(--panel-border); font-size: 12px;}
+        .b-stat span { color: var(--accent); font-weight: bold; float: right;}
+        .pnl-positive { color: var(--success) !important; }
+        .pnl-negative { color: var(--danger) !important; }
+        
+        /* App Lock Engine */
+        #appLockScreen { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
+        .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 30px; width: 100%; max-width: 250px; }
+        .pin-btn { background: var(--card-bg); color: white; border: 1px solid var(--panel-border); border-radius: 50%; width: 60px; height: 60px; font-size: 24px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; margin: 0 auto; transition: transform 0.1s, background 0.1s; }
+        .pin-btn:active { transform: scale(0.9); background: var(--accent); color: #000; }
+        .pin-dots { display: flex; gap: 10px; margin-top: 20px; }
+        .pin-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--panel-border); background: transparent; transition: background 0.2s; }
+        .pin-dot.filled { background: var(--accent); border-color: var(--accent); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideInLeft { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes slideUpModal { from { opacity: 0; transform: translateY(40px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        
+        #printArea { display: none; }
+        @media print { 
+            body > * { display: none !important; } 
+            body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; background: white; color: #0f172a; padding: 0; margin: 0; box-sizing: border-box; } 
+        }
+    </style>
+</head>
+<body>
+
+<div id="appLockScreen">
+    <div style="font-size:40px; margin-bottom:10px;">🏦</div>
+    <div style="font-size:18px; font-weight:bold; letter-spacing:2px; text-transform:uppercase;">Crew Wallet Locked</div>
+    <div id="lockMessage" style="font-size:12px; color:var(--text-muted); margin-top:10px;">Enter PIN or use FaceID to unlock.</div>
+    <div class="pin-dots" id="pinDots">
+        <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+    </div>
+    <div class="pin-pad" id="pinPad">
+        <button class="pin-btn" onclick="ui.enterPin(1)">1</button><button class="pin-btn" onclick="ui.enterPin(2)">2</button><button class="pin-btn" onclick="ui.enterPin(3)">3</button>
+        <button class="pin-btn" onclick="ui.enterPin(4)">4</button><button class="pin-btn" onclick="ui.enterPin(5)">5</button><button class="pin-btn" onclick="ui.enterPin(6)">6</button>
+        <button class="pin-btn" onclick="ui.enterPin(7)">7</button><button class="pin-btn" onclick="ui.enterPin(8)">8</button><button class="pin-btn" onclick="ui.enterPin(9)">9</button>
+        <button class="pin-btn" style="background:transparent; border:none;"></button><button class="pin-btn" onclick="ui.enterPin(0)">0</button><button class="pin-btn" style="background:transparent; border:none; color:var(--danger); font-size:16px;" onclick="ui.clearPin()">⌫</button>
+    </div>
+    <button class="v-btn" id="btnTriggerBio" style="margin-top:30px; background:var(--panel-border); display:none;" onclick="ui.triggerBiometrics()">Scan FaceID</button>
+</div>
+
+<div class="app-container" id="appWrapper" style="display:none;">
+    <div id="tab-dash" class="page-section active">
+        <div class="vault-card" style="border-color: var(--accent); position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--accent);"></div>
+            <div class="vault-header" style="margin-top: 8px;">
+                <span>🏦 Global Wealth Vault</span>
+                <span id="offlineBadge" style="display:none; color:var(--danger); font-weight:bold; font-size:9px;">⚠️ OFFLINE</span>
+            </div>
+            
+            <div style="text-align: center; margin-bottom: 15px; padding: 10px; background: var(--vault-bg); border-radius: 12px; border: 1px solid var(--panel-border);">
+                <div class="title" style="color:var(--accent); font-size: 9px; justify-content: center;">Liquid Runway</div>
+                <div style="font-size:22px; font-weight:800; color: var(--text);">
+                    <span id="uiRunway">0 Days</span> 
+                    <span id="uiRunwayBudget" style="font-size:10px; color:var(--text-muted); font-weight:normal; margin-left:4px;"></span>
+                </div>
+                <div style="font-size:9px; color:var(--warning); font-weight:bold; margin-top:4px;" id="uiNetRunway">Net (Excl. Envelopes & Vapes): 0 Days</div>
+                <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px dashed var(--panel-border); padding-top:8px;">
+                    <div style="font-size:10px; color:var(--text-muted); text-align:left;">Total USD Assets:<br><strong id="totUSD" style="color:var(--text); font-size:13px;">$0.00</strong></div>
+                    <div style="font-size:10px; color:var(--text-muted); text-align:right;">Total Wealth:<br><strong id="totTND" style="color:var(--success); font-size:13px;">0.00 TND</strong></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--panel-border); padding-top:8px;" id="uiCountdownBox"></div>
+            </div>
+
+            <div class="vault-grid">
+                <div class="vault-item" onclick="ui.openIBKRModal()" style="background: rgba(56, 189, 248, 0.1); border-color: #38bdf8;">
+                    <span class="v-lbl" style="color:#38bdf8;">IBKR (Tap)</span>
+                    <span class="v-val" id="v_ibkr_total">0.00</span>
+                    <div class="v-sub" id="v_ibkr_pnl" style="font-weight:bold;">$0.00</div>
+                </div>
+                <div class="vault-item"><span class="v-lbl">Brightwell ($)</span><span class="v-val" id="v_brightwell">0.00</span></div>
+                <div class="vault-item"><span class="v-lbl">Wise (USD)</span><span class="v-val" id="v_wise">0.00</span></div>
+                <div class="vault-item"><span class="v-lbl">Cash (USD)</span><span class="v-val" id="v_cash_usd">0.00</span></div>
+                <div class="vault-item"><span class="v-lbl">Cash (TND)</span><span class="v-val" id="v_cash_tnd">0.00</span></div>
+                <div class="vault-item"><span class="v-lbl">Savings (TND)</span><span class="v-val" id="v_savings">0.00</span></div>
+            </div>
+            <div class="vault-actions">
+                <button class="v-btn" style="background:#16a34a;" onclick="ui.openPaycheckModal()">💵 Paycheck</button>
+                <button class="v-btn" onclick="ui.openIncomeModal()">📥 Deposit</button>
+                <button class="v-btn" style="background:#ca8a04;" onclick="engine.vaultWise()">🦉 Wise</button>
+                <button class="v-btn" onclick="ui.openTransferModal()">🔄 Transfer</button>
+                <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="ui.openSweepModal()">📈 Sweep</button>
+                <button class="v-btn" style="background:var(--accent); color:#000;" onclick="ui.openATMModal()">🏧 ATM</button>
+            </div>
+            <button style="background:none; border:none; color:var(--text-muted); font-size:10px; cursor:pointer; width:100%; text-align:center; margin-top:12px; text-decoration:underline;" onclick="document.getElementById('editModal').style.display='flex'">✏️ Manual Override Balances</button>
+        </div>
+
+        <div class="scoreboard-row">
+            <div class="score-box green-box" onclick="ui.openBehaviorModal()"><div class="title">🟢 Safe Days</div><div class="score-num" id="safeDaysCount">0</div></div>
+            <div class="score-box red-box" onclick="ui.openBehaviorModal()"><div class="title">🔴 Over Days</div><div class="score-num" id="overDaysCount">0</div></div>
+            <div class="score-box green-box" style="border-color:rgba(74, 222, 128, 0.3);" onclick="ui.openBehaviorModal()"><div class="title">🔥 Cur Streak</div><div class="score-num" id="curStreakCount">0</div></div>
+            <div class="score-box" style="border-color:rgba(56, 189, 248, 0.3);" onclick="ui.openBehaviorModal()"><div class="title" style="color:#38bdf8;">🏆 Max Streak</div><div class="score-num" id="maxStreakCount" style="color:#38bdf8;">0</div></div>
+        </div>
+
+        <div class="balance-card">
+            <div class="surplus-badge" id="surplusBadge">+0.00</div>
+            <div class="title" id="balanceTitle">Remaining Today</div>
+            <div class="balance" id="balanceDisplay">0.00</div>
+            <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
+            <div id="spilloverAlert" style="display:none; font-size:9px; color:var(--danger); font-weight:bold; margin-top:8px;">⚠️ Envelope Spillover Active</div>
+            <button class="btn-secondary" style="margin-top:15px; border-color:var(--accent); color:var(--accent);" onclick="engine.closeOutDay()">🌙 Close Out Day</button>
+        </div>
+
+        <div class="form-panel">
+            <div class="input-row">
+                <input type="text" id="customDescription" class="flex-main" placeholder="What?" enterkeyhint="done">
+                <input type="number" id="customAmount" class="flex-side" placeholder="Cost" inputmode="decimal" oninput="ui.toggleFXOverride('adv')">
+                <button class="expand-btn" onclick="let el = document.getElementById('advMain'); el.style.display = el.style.display === 'flex' ? 'none' : 'flex'; ui.toggleFXOverride('adv');">⚙️</button>
+                <button class="btn-action" onclick="engine.logExpense()">Log</button>
+            </div>
+            <div class="advanced-context-box" id="advMain">
+                <select id="advProject" onchange="ui.toggleOnlineFields('adv')"></select>
+                <div id="advOnlineBox" style="display:none; gap:8px;">
+                    <input type="number" id="advShipping" placeholder="Shipping $" class="flex-main" inputmode="decimal">
+                    <input type="number" id="advTax" placeholder="Tax/Ministry $" class="flex-main" inputmode="decimal">
+                </div>
+                <select id="advSourceWallet" onchange="ui.toggleFXOverride('adv')">
+                    <option value="default">💰 Deduct from: Daily Pocket Cash</option>
+                    <option value="cash_tnd">💵 Deduct from: Cash TND</option>
+                    <option value="brightwell">💳 Deduct from: Brightwell</option>
+                    <option value="wise">🦉 Deduct from: Wise</option>
+                    <option value="savings">🏦 Deduct from: Savings TND</option>
+                </select>
+                <div id="advFXOverrideBox" style="display:none; flex-direction:column; gap:6px; margin-top:4px; background:rgba(250, 204, 21, 0.15); padding:10px; border-radius:8px; border:1px solid var(--warning);">
+                    <label style="font-size:11px; color:var(--warning); font-weight:bold;">⚠️ Currency Mismatch Detected</label>
+                    <div style="font-size:9px; color:var(--text-muted); margin-bottom:2px;">Enter the exact amount your bank deducted.</div>
+                    <input type="number" id="advActualDeduct" placeholder="Exact bank charge" inputmode="decimal" style="border-color:var(--warning); background-color: rgba(15, 23, 42, 0.8); color:var(--text);">
+                </div>
+                <select id="advCategory" onchange="ui.handleCategoryChange('advCategory')"></select>
+                <div id="advVapeQtyBox" style="display:none; margin-top:4px;">
+                    <input type="number" id="advVapeQty" placeholder="How many vapes did you buy?" style="border-color:#a855f7;" inputmode="numeric">
+                </div>
+                <input type="text" id="advLocation" placeholder="📍 Location" enterkeyhint="done">
+                <input type="text" id="advItems" placeholder="🛒 Exact items" enterkeyhint="done">
+                <input type="text" id="advWhom" placeholder="👥 Paid for someone else?" enterkeyhint="done">
+            </div>
+        </div>
+        <div class="history-card"><div class="title" style="margin-bottom: 4px;">Today's Activity</div><div id="historyList"></div></div>
+    </div>
+
+    <div id="tab-debt" class="page-section">
+        <div class="vault-card debt-card">
+            <div class="vault-header" style="color: var(--danger);"><span>🚨 STB Bank Master Debt</span></div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+                <div>
+                    <div class="v-lbl">Total True Liability (TND)</div>
+                    <div class="v-val" id="l_total_tnd" style="font-size:24px; color:var(--danger);">0.00 TND</div>
+                    <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">≈ <span id="l_total_usd">$0.00</span></div>
+                </div>
+                <div style="text-align:right;">
+                    <div class="v-lbl">Daily Interest Bleed</div>
+                    <div class="v-val" id="l_bleed" style="font-size:14px; color:var(--warning);">0.00 TND</div>
+                </div>
+            </div>
+            
+            <div style="margin-top:15px; padding-top:10px; border-top:1px dashed var(--panel-border); font-size:11px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                    <span>Arrears Block:</span> 
+                    <strong onclick="engine.editLoanComponent('arrears')" style="cursor:pointer; color:var(--accent); font-size:12px;">✏️ <span id="l_arrears">0.00</span> TND</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                    <span>Account Deficit:</span> 
+                    <strong onclick="engine.editLoanComponent('overdraft')" style="cursor:pointer; color:var(--accent); font-size:12px;">✏️ <span id="l_overdraft">0.00</span> TND</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Pending Installments:</span> 
+                    <strong id="l_scheduled" style="font-size:12px;">0.00 TND</strong>
+                </div>
+            </div>
+
+            <div style="margin-top:15px; padding-top:10px; border-top:1px dashed var(--panel-border);">
+                <div style="font-size:10px; color:var(--text-muted); margin-bottom:5px;">Target Zero Date (Optional):</div>
+                <input type="month" id="l_target_date" onchange="engine.calculateKillShot()" style="margin-bottom:10px; padding:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-bottom:4px;">
+                    <span>Months Left:</span> 
+                    <div style="text-align:right;">
+                        <strong id="l_months_left" style="font-size:13px;">0</strong>
+                        <div id="l_months_breakdown" style="font-size:9px; color:var(--text-muted); margin-top:2px;">(0 Active + 0 Vacation)</div>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:11px; margin-top:8px;">
+                    <span>Monthly "Kill Shot" Req:</span> <strong id="l_kill_shot" style="color:var(--warning); font-size:13px;">0.00 TND</strong>
+                </div>
+            </div>
+
+            <button class="btn-secondary" style="margin-top:15px; border-color:var(--danger); color:var(--danger);" onclick="ui.openSTBModal()">Log Direct Manual Payment</button>
+        </div>
+
+        <div class="vault-card" style="border-color: rgba(220, 38, 38, 0.4);">
+            <div class="vault-header" style="color: var(--danger);"><span>💳 Amortization Schedule</span></div>
+            <div id="loanScheduleList" style="margin-top: 10px;"></div>
+        </div>
+        <div class="vault-card" style="border-color: rgba(250, 204, 21, 0.4);">
+            <div class="vault-header" style="color: var(--warning);"><span>💸 Payables (Money I Owe)</span><button onclick="engine.addIOU('payable')" style="background:none;border:none;color:var(--text);font-size:16px;">➕</button></div>
+            <div id="payablesList" style="margin-top: 10px;"></div>
+        </div>
+        <div class="vault-card" style="border-color: rgba(74, 222, 128, 0.4);">
+            <div class="vault-header" style="color: var(--success);"><span>📥 Receivables (Owed To Me)</span><button onclick="engine.addIOU('receivable')" style="background:none;border:none;color:var(--text);font-size:16px;">➕</button></div>
+            <div id="receivablesList" style="margin-top: 10px;"></div>
+        </div>
+    </div>
+
+    <div id="tab-analytics" class="page-section">
+        <div class="vault-card" style="border-color: rgba(74, 222, 128, 0.5); text-align: center; padding: 25px 15px;">
+            <div class="title" style="color: var(--success);" id="uiCapitalSavedLbl">Total Capital Saved</div>
+            <div style="font-size: 38px; font-weight: 800; color: var(--success);" id="uiCapitalSaved">0.00</div>
+            <div style="font-size: 10px; color: var(--text-muted); margin-top: 5px;">Isolated calculation based on active mode.</div>
+            
+            <div style="margin-top:15px; padding-top:10px; border-top:1px dashed rgba(74, 222, 128, 0.3);">
+                <div class="title" style="justify-content:center; color:var(--text);">📊 Avg Daily Spend (<span id="uiAvgSpendMode">Vacation</span>)</div>
+                <div style="font-size: 16px; font-weight: bold; color: var(--accent);" id="uiAvgSpend">0.00 TND</div>
+            </div>
+        </div>
+
+        <div class="vault-card" style="border-color: #a855f7;">
+            <div class="title" style="color:#a855f7;">💨 Vape Command Center</div>
+            <div id="vapeStatsHtml" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="title" style="margin-top:10px;"><span>📁 Envelopes</span><button onclick="ui.openAddProjectModal('env')" style="background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">➕</button></div>
+        <div id="envelopeContainer" style="display:flex; flex-direction:column; gap:10px;"></div>
+
+        <div class="title" style="margin-top:15px;"><span>🎯 Missions</span><button onclick="ui.openAddProjectModal('mis')" style="background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">➕</button></div>
+        <div id="missionContainer" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;"></div>
+
+        <div class="title" style="margin-top:15px;"><span>🏆 Goals</span><button onclick="ui.openAddProjectModal('goal')" style="background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">➕</button></div>
+        <div id="goalsContainer" style="display:flex; flex-direction:column; gap:10px;"></div>
+
+        <button class="btn-secondary" style="margin-top:10px;" onclick="document.getElementById('archiveSection').style.display=document.getElementById('archiveSection').style.display==='none'?'block':'none'">📦 View Archived Trackers</button>
+        <div id="archiveSection" style="display:none; margin-top:10px; padding:10px; background:var(--vault-bg); border-radius:8px; border:1px dashed var(--panel-border);"></div>
+
+        <div class="vault-card" style="margin-top:15px; border-color: rgba(251, 191, 36, 0.4);">
+            <div class="title" style="color:var(--accent);">📍 Top Hubs & Vendors (All Time)</div>
+            <div id="leaderboardHtml" class="scrollable-list" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="vault-card" style="margin-top:15px;">
+            <div class="title" style="border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">Master Category Breakdown</div>
+            <div style="display:flex; gap:10px; margin: 10px 0;"><button class="v-btn" style="flex:1" onclick="engine.renderChart(7)">7 Days</button><button class="v-btn" style="flex:1" onclick="engine.renderChart(30)">30 Days</button><button class="v-btn" style="flex:1" onclick="engine.renderChart(9999)">All Time</button></div>
+            <div id="catGraphContainer" style="margin-top:15px;"></div>
+            <button class="btn-secondary" onclick="engine.exportPDFReport()" style="margin-top: 20px; border-color: var(--accent); color: var(--accent);">📄 Generate A4 PDF Report</button>
+        </div>
+    </div>
+
+    <div id="tab-time" class="page-section">
+        <div class="vault-card">
+            <div class="title" style="border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">⏳ Time Machine Logbook</div>
+            
+            <input type="text" id="tmSearch" placeholder="🔍 Search logs by tag, category, or location..." oninput="engine.searchLogs()" style="margin-top:10px; margin-bottom:10px; width:100%; border-radius:8px; border:1px solid var(--panel-border); padding:10px; background:#0f172a; color:white;">
+            <div id="tmSearchResults" style="display:none; margin-bottom:15px; max-height:250px; overflow-y:auto; border:1px solid var(--accent); padding:10px; border-radius:8px; background:var(--vault-bg);"></div>
+
+            <div id="tmNormalView">
+                <input type="date" id="tmDate" onchange="engine.loadPastDay()" style="color-scheme: dark; width:100%;">
+                <div class="history-card" style="margin-top:10px; max-height:none; padding:8px;" id="tmList"></div>
+            </div>
+
+            <div style="margin-top:10px; border-top:1px dashed var(--panel-border); padding-top:10px;">
+                <button class="btn-secondary" id="btnToggleTMForm" onclick="ui.toggleTMForm()" style="border-color:var(--accent); color:var(--accent);">➕ Log Past Expense</button>
+                
+                <div id="tmFormContainer" style="display:none; margin-top:10px;">
+                    <div id="tmEditBanner" style="display:none; background:rgba(250, 204, 21, 0.2); color:var(--warning); padding:8px; border-radius:8px; margin-bottom:10px; font-weight:bold; font-size:11px; text-align:center; border: 1px solid var(--warning);">
+                        ✏️ Editing Past Record 
+                        <button onclick="ui.cancelTMEdit()" style="margin-left:10px; background:#000; color:var(--warning); border:1px solid var(--warning); border-radius:4px; padding:4px 8px; font-weight:bold;">Cancel</button>
+                    </div>
+
+                    <div class="input-row" style="margin-top:6px;">
+                        <input type="text" id="tmTag" class="flex-main" placeholder="What?">
+                        <input type="number" id="tmAmount" class="flex-side" placeholder="Cost" oninput="ui.toggleFXOverride('tm')">
+                        <button class="expand-btn" onclick="let el = document.getElementById('advTM'); el.style.display = el.style.display === 'flex' ? 'none' : 'flex'; ui.toggleFXOverride('tm');">⚙️</button>
+                        <button class="btn-action" onclick="engine.logPastExpense()">Save</button>
+                    </div>
+                    <div class="advanced-context-box" id="advTM">
+                        <select id="tmProject" onchange="ui.toggleOnlineFields('tm')"></select>
+                        <div id="tmOnlineBox" style="display:none; gap:8px;">
+                            <input type="number" id="tmShipping" placeholder="Shipping $" class="flex-main" inputmode="decimal">
+                            <input type="number" id="tmTax" placeholder="Tax/Ministry $" class="flex-main" inputmode="decimal">
+                        </div>
+                        <select id="tmSourceWallet" onchange="ui.toggleFXOverride('tm')">
+                            <option value="default">💰 Default Pocket Cash</option>
+                            <option value="cash_tnd">💵 Deduct from: Cash TND</option>
+                            <option value="brightwell">💳 Brightwell</option>
+                            <option value="wise">🦉 Wise</option>
+                            <option value="savings">🏦 Savings TND</option>
+                        </select>
+
+                        <div id="tmFXOverrideBox" style="display:none; flex-direction:column; gap:6px; margin-top:4px; background:rgba(250, 204, 21, 0.15); padding:10px; border-radius:8px; border:1px solid var(--warning);">
+                            <label style="font-size:11px; color:var(--warning); font-weight:bold;">⚠️ Currency Mismatch Detected</label>
+                            <div style="font-size:9px; color:var(--text-muted); margin-bottom:2px;">Enter the exact amount your bank deducted.</div>
+                            <input type="number" id="tmActualDeduct" placeholder="Exact bank charge" inputmode="decimal" style="border-color:var(--warning); background-color: rgba(15, 23, 42, 0.8); color:var(--text);">
+                        </div>
+
+                        <select id="tmCategory" onchange="ui.handleCategoryChange('tmCategory')"></select>
+                        
+                        <div id="tmVapeQtyBox" style="display:none; margin-top:4px;">
+                            <input type="number" id="tmVapeQty" placeholder="How many vapes did you buy?" style="border-color:#a855f7;" inputmode="numeric">
+                        </div>
+
+                        <input type="text" id="tmLocation" placeholder="📍 Location"><input type="text" id="tmItems" placeholder="🛒 Exact items"><input type="text" id="tmWhom" placeholder="👥 For whom?">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="vault-card" style="border-color: rgba(74, 222, 128, 0.4);">
+            <div class="title" style="color:var(--success); border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">💵 Income & Funding Ledger</div>
+            <div class="history-card" style="margin-top:10px; max-height:200px; padding:8px;" id="incomeList"></div>
+        </div>
+    </div>
+
+    <div id="tab-settings" class="page-section">
+        <div class="vault-card">
+            <div class="title">Mode & Limits</div>
+            <select id="setMode" onchange="engine.changeMode()" style="margin-bottom:10px;"><option value="vacation">🏖️ Vacation Mode (TND)</option><option value="onboard">🚢 Onboard Mode (USD)</option></select>
+            <div class="input-row"><span style="font-size:12px; width:100%;">Vacation Limit:</span><input type="number" id="setVacLimit" onchange="engine.updateLimits()"></div>
+            <div class="input-row"><span style="font-size:12px; width:100%;">Onboard Limit:</span><input type="number" id="setOnbLimit" onchange="engine.updateLimits()"></div>
+        </div>
+
+        <div class="vault-card">
+            <div class="title">Contract & Vacation Dates</div>
+            <div class="input-row" style="margin-bottom:8px;"><span style="font-size:12px; width:100%;">Vacation Start:</span><input type="date" id="setVacationStart" onchange="engine.updateContractDates()"></div>
+            <div class="input-row" style="margin-bottom:8px;"><span style="font-size:12px; width:100%;">Vacation End:</span><input type="date" id="setVacationEnd" onchange="engine.updateContractDates()"></div>
+            <div class="input-row" style="margin-bottom:8px;"><span style="font-size:12px; width:100%;">Contract Start:</span><input type="date" id="setContractStart" onchange="engine.updateContractDates()"></div>
+            <div class="input-row"><span style="font-size:12px; width:100%;">Contract End:</span><input type="date" id="setContractEnd" onchange="engine.updateContractDates()"></div>
+        </div>
+
+        <div class="vault-card">
+            <div class="title">Custom Categories</div>
+            <button class="btn-secondary" onclick="ui.manageCategories()">🛠️ Manage Custom Categories</button>
+        </div>
+
+        <div class="vault-card">
+            <div class="title" style="color:var(--accent);">Security</div>
+            <div class="input-row" style="margin-bottom:10px;"><span style="font-size:12px; width:100%;">App Lock PIN:</span><input type="password" id="setPin" maxlength="4" onchange="engine.updatePin()" placeholder="0000"></div>
+            <button class="btn-secondary" style="border-color:var(--accent); color:var(--accent);" onclick="ui.registerFaceID()">🛡️ Enable FaceID / TouchID</button>
+        </div>
+
+        <div class="vault-card">
+            <div class="title">FX Engine</div>
+            <div class="input-row"><span style="font-size:12px; width:100%;">Live USD/TND:</span><input type="number" id="setFX" onchange="engine.updateFX()"></div>
+            <button class="btn-secondary" onclick="engine.fetchLiveFX()">🔄 Auto-Fetch from Market</button>
+        </div>
+
+        <div class="vault-card">
+            <div class="title" style="color:var(--success);">Data Sovereignty & System</div>
+            <button class="btn-secondary" onclick="engine.forceAppUpdate()" style="margin-bottom: 10px; border-color: #38bdf8; color: #38bdf8; background: rgba(56, 189, 248, 0.1);">🔄 Force App Update (Clear Cache)</button>
+            <button class="btn-secondary" onclick="engine.exportData()" style="color:var(--text);">💾 Export JSON Backup</button>
+            <input type="file" id="importFile" style="display:none;" onchange="engine.importData(event)" accept=".json">
+            <button class="btn-secondary" onclick="document.getElementById('importFile').click()" style="color:var(--text);">📂 Restore from Backup</button>
+            <button class="btn-secondary" onclick="engine.recalibrateMath()" style="margin-top: 10px; border-color: var(--warning); color: var(--warning);">🧮 Recalibrate Database Math</button>
+            <button class="btn-secondary" onclick="engine.factoryReset()" style="margin-top: 10px; border-color: var(--danger); color: var(--danger); background: rgba(248, 113, 113, 0.1);">🗑️ Factory Reset App</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="addProjectModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:var(--accent);">Create New Tracker</div>
+        <input type="text" id="npName" placeholder="Tracker Name (e.g. Driving License)" style="margin-top:15px; width:100%;">
+        <select id="npType" style="margin-top:10px; width:100%;" onchange="ui.toggleProjectFields()">
+            <option value="env">📁 Envelope (Fixed Budget)</option>
+            <option value="mis">🎯 Mission (Open Cost Center)</option>
+            <option value="goal">🏆 Savings Goal</option>
+        </select>
+        <select id="npCurrency" style="margin-top:10px; width:100%;">
+            <option value="TND">Currency: TND</option>
+            <option value="USD">Currency: USD</option>
+        </select>
+        <input type="number" id="npLimit" placeholder="Target/Limit Amount" style="margin-top:10px; width:100%;" inputmode="decimal">
+        <div id="npOptions" style="margin-top:15px; background:var(--vault-bg); padding:10px; border-radius:8px; border:1px dashed var(--panel-border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <label style="font-size:11px;">Bypass Daily Limit?</label>
+                <input type="checkbox" id="npBypass">
+            </div>
+            <div id="npLogisticsBox" style="display:flex; justify-content:space-between; align-items:center;">
+                <label style="font-size:11px;">Track Dead Money (Shipping/Tax)?</label>
+                <input type="checkbox" id="npLogistics">
+            </div>
+        </div>
+        <div class="modal-btn-row">
+            <button class="btn-secondary" onclick="document.getElementById('addProjectModal').style.display='none'">Cancel</button>
+            <button class="v-btn" style="background:var(--accent); color:#000;" onclick="engine.submitNewProject()">Create</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="transferModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:#38bdf8;">🔄 Internal Transfer</div>
+        <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Move funds between your vaults safely.</div>
+        <input type="number" id="trfAmount" placeholder="Amount to move" inputmode="decimal" style="width:100%;">
+        <select id="trfFrom" style="margin-top:10px; width:100%;">
+            <option value="cash_tnd">From: Cash (TND)</option>
+            <option value="savings">From: Savings (TND)</option>
+            <option value="cash_usd">From: Cash (USD)</option>
+            <option value="brightwell">From: Brightwell (USD)</option>
+            <option value="wise">From: Wise (USD)</option>
+            <option value="ibkr_cash">From: IBKR Idle (USD)</option>
+        </select>
+        <select id="trfTo" style="margin-top:10px; width:100%;">
+            <option value="savings">To: Savings (TND)</option>
+            <option value="cash_tnd">To: Cash (TND)</option>
+            <option value="cash_usd">To: Cash (USD)</option>
+            <option value="brightwell">To: Brightwell (USD)</option>
+            <option value="wise">To: Wise (USD)</option>
+            <option value="ibkr_cash">To: IBKR Idle (USD)</option>
+        </select>
+        <div style="font-size:9px; color:var(--warning); margin-top:10px; text-align:center; background:rgba(250, 204, 21, 0.1); padding:8px; border-radius:8px;">
+            If moving between TND and USD, the live FX rate will be applied mathematically.
+        </div>
+        <div class="modal-btn-row">
+            <button class="btn-secondary" onclick="document.getElementById('transferModal').style.display='none'">Cancel</button>
+            <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="engine.processTransfer()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="paycheckModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:var(--success);">💵 Smart Paycheck Wizard</div>
+        <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Input gross pay and adjust splits.</div>
+        <input type="number" id="pwGross" placeholder="Gross Pay (USD)" style="font-size:20px; font-weight:bold; text-align:center;" inputmode="decimal" oninput="ui.calcPaycheck('gross', null)">
+        
+        <div style="margin-top:20px; background:var(--vault-bg); padding:12px; border-radius:8px; border:1px solid var(--panel-border);">
+            
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; align-items:center;">
+                <span style="color:var(--danger); display:flex; align-items:center; gap:4px;">🚨 STB Auto-Wire 
+                    <input type="number" id="pwLoanPct" value="40" style="width:45px; padding:4px; font-size:12px; text-align:center; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="ui.calcPaycheck('pct', 'loan')">%
+                </span>
+                <div style="display:flex; align-items:center; gap:4px; font-size:13px; font-weight:bold;">
+                    $ <input type="number" id="pwLoanAmt" style="width:60px; padding:4px; font-size:12px; text-align:right; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="ui.calcPaycheck('amt', 'loan')">
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; padding-top:8px; border-top:1px dashed var(--panel-border); align-items:center;">
+                <span style="color:#38bdf8; display:flex; align-items:center; gap:4px;">📈 Savings/IBKR 
+                    <input type="number" id="pwSavPct" value="15" style="width:45px; padding:4px; font-size:12px; text-align:center; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="ui.calcPaycheck('pct', 'sav')">%
+                </span>
+                <div style="display:flex; align-items:center; gap:4px; font-size:13px; font-weight:bold;">
+                    $ <input type="number" id="pwSavAmt" style="width:60px; padding:4px; font-size:12px; text-align:right; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="ui.calcPaycheck('amt', 'sav')">
+                </div>
+            </div>
+            <select id="pwSavDest" style="margin-top:4px; font-size:10px; padding:6px;">
+                <option value="ibkr">Route to: IBKR (Idle Cash)</option>
+                <option value="savings">Route to: Savings (TND)</option>
+            </select>
+            
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-top:8px; padding-top:8px; border-top:1px dashed var(--panel-border); align-items:center;">
+                <span style="color:var(--success); display:flex; align-items:center; gap:4px;">💳 Brightwell (Op.) 
+                    <input type="number" id="pwOpPct" value="45" style="width:45px; padding:4px; font-size:12px; text-align:center; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="ui.calcPaycheck('pct', 'op')">%
+                </span>
+                <div style="display:flex; align-items:center; gap:4px; font-size:13px; font-weight:bold;">
+                    $ <input type="number" id="pwOpAmt" style="width:60px; padding:4px; font-size:12px; text-align:right; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="ui.calcPaycheck('amt', 'op')">
+                </div>
+            </div>
+        </div>
+        <div class="modal-btn-row">
+            <button class="btn-secondary" onclick="document.getElementById('paycheckModal').style.display='none'">Cancel</button>
+            <button class="v-btn" style="background:var(--success);" onclick="engine.processPaycheck()">Execute</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="ibkrModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:#38bdf8;">📈 IBKR Portfolio Command</div>
+        <div style="display:flex; justify-content:space-between; background:var(--vault-bg); padding:10px; border-radius:8px; border:1px solid var(--panel-border); margin-top:10px;">
+            <div style="text-align:center; flex:1;">
+                <div style="font-size:9px; color:var(--text-muted);">Idle Cash</div>
+                <input type="number" id="ibkrIdle" inputmode="decimal" style="font-size:14px; font-weight:bold; text-align:center; padding:4px; margin-top:4px;" oninput="engine.saveIBKR()">
+            </div>
+            <div style="text-align:center; flex:1; border-left:1px solid var(--panel-border); margin-left:10px; padding-left:10px;">
+                <div style="font-size:9px; color:var(--text-muted);">Total Shares</div>
+                <input type="number" id="ibkrShares" inputmode="decimal" style="font-size:14px; font-weight:bold; text-align:center; padding:4px; margin-top:4px;" oninput="engine.saveIBKR()">
+            </div>
+        </div>
+        <div class="modal-input-group" style="margin-top:15px;">
+            <label>Cost Basis (Total Cash Deployed)</label>
+            <input type="number" id="ibkrCost" inputmode="decimal" oninput="engine.saveIBKR()">
+        </div>
+        <div class="modal-input-group" style="margin-top:10px;">
+            <label style="color:#38bdf8; display:flex; justify-content:space-between;">
+                Live Market Price (Per Share) 
+                <button onclick="engine.fetchStockPrice()" style="background:none; border:none; color:var(--accent); font-size:10px; cursor:pointer; padding:0;">Auto-Fetch 🔄</button>
+            </label>
+            <input type="number" id="ibkrPrice" inputmode="decimal" oninput="engine.saveIBKR()">
+        </div>
+        <button class="btn-secondary" style="margin-top:20px;" onclick="document.getElementById('ibkrModal').style.display='none'">Close & Update Dashboard</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="sweepModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:#38bdf8;">📈 IBKR Investment Sweep</div>
+        <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Move cash into Idle Brokerage.</div>
+        <input type="number" id="swAmount" placeholder="Amount (USD)" inputmode="decimal" style="width:100%;">
+        <select id="swSource" style="margin-top:10px; width:100%;">
+            <option value="brightwell">Sweep from: Brightwell</option>
+            <option value="wise">Sweep from: Wise</option>
+            <option value="cash_usd">Sweep from: Cash (USD)</option>
+        </select>
+        <div class="modal-btn-row">
+            <button class="btn-secondary" onclick="document.getElementById('sweepModal').style.display='none'">Cancel</button>
+            <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="engine.processSweep()">Confirm Sweep</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="atmModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:var(--accent);">🏧 ATM Withdrawal Wizard</div>
+        <input type="number" id="atmAmt" placeholder="Withdrawal Amount" style="margin-top:5px; width:100%;" inputmode="decimal">
+        <select id="atmSource" style="margin-top:10px; width:100%;">
+            <option value="savings">Source: Savings TND (0 Fee)</option>
+            <option value="brightwell">Source: Brightwell USD (FX + Fee)</option>
+            <option value="wise">Source: Wise USD (FX + Fee)</option>
+        </select>
+        <select id="atmLoc" style="margin-top:10px; width:100%;" onchange="ui.toggleATMFee()">
+            <option value="tunisia">Location: Tunisia (+10 TND Fee)</option>
+            <option value="intl">Location: International (Manual Fee)</option>
+            <option value="no-fee">Location: No-Fee Channel (0 Fee)</option>
+        </select>
+        <div id="atmFeeGroup" style="display:none; flex-direction:column; margin-top:10px;">
+            <input type="number" id="atmFee" placeholder="Manual ATM Fee (USD)" style="width:100%;" inputmode="decimal">
+        </div>
+        <div class="modal-btn-row">
+            <button class="btn-secondary" onclick="document.getElementById('atmModal').style.display='none'">Cancel</button>
+            <button class="v-btn" style="background:var(--accent); color:#000;" onclick="engine.processATM()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="incomeModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:var(--success);">Log Income / Add Funds</div>
+        <input type="number" id="incAmount" placeholder="Amount" style="margin-top:15px; width:100%;" inputmode="decimal">
+        <select id="incSource" style="margin-top:10px; width:100%;" onchange="ui.updateIncPlaceholder()">
+            <option value="gig">🛠️ Side Gig</option>
+            <option value="sale">🏷️ Sale</option>
+            <option value="borrow">🤝 Borrowed Money</option>
+            <option value="custom">✏️ Custom / Other</option>
+        </select>
+        <select id="incWallet" style="margin-top:10px; width:100%;">
+            <option value="cash_tnd">Deposit into: Cash (TND)</option>
+            <option value="cash_usd">Deposit into: Cash (USD)</option>
+            <option value="brightwell">Deposit into: Brightwell (USD)</option>
+            <option value="wise">Deposit into: Wise (USD)</option>
+            <option value="savings">Deposit into: Savings (TND)</option>
+            <option value="ibkr_cash">Deposit into: IBKR (Idle Cash)</option>
+        </select>
+        <input type="text" id="incDetails" placeholder="What was the gig?" style="margin-top:10px; width:100%;" enterkeyhint="done">
+        <div style="font-size:9px; color:var(--warning); text-align:center; margin-top:10px; display:none;" id="incBorrowWarning">This generates a Payable IOU.</div>
+        <div class="modal-btn-row">
+            <button class="btn-secondary" onclick="document.getElementById('incomeModal').style.display='none'">Cancel</button>
+            <button class="v-btn" style="background:var(--success);" onclick="engine.processIncome()">Save</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="editModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:white;">Override Vault Balances</div>
+        <div class="modal-grid">
+            <div class="modal-input-group"><label>Brightwell (USD)</label><input type="number" id="m_brightwell" inputmode="decimal"></div>
+            <div class="modal-input-group"><label>Wise (USD)</label><input type="number" id="m_wise" inputmode="decimal"></div>
+            <div class="modal-input-group"><label>Cash (USD)</label><input type="number" id="m_cash_usd" inputmode="decimal"></div>
+            <div class="modal-input-group"><label>Cash (TND)</label><input type="number" id="m_cash_tnd" inputmode="decimal"></div>
+            <div class="modal-input-group"><label>Savings (TND)</label><input type="number" id="m_savings" inputmode="decimal"></div>
+        </div>
+        <div class="modal-btn-row">
+            <button class="btn-secondary" onclick="document.getElementById('editModal').style.display='none'">Cancel</button>
+            <button class="v-btn" style="background:var(--success);" onclick="engine.saveEditModal()">Save</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="behaviorModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:white;">Behavioral Insights</div>
+        
+        <div style="display:flex; justify-content:space-between; gap:10px; margin-bottom:10px;">
+            <div class="b-stat" style="flex:1; margin-bottom:0; text-align:center;">
+                <div style="font-size:10px; color:var(--text-muted);">Current Streak</div>
+                <div id="b_curStreak" style="color:var(--success); font-size:16px;">0 Days</div>
+            </div>
+            <div class="b-stat" style="flex:1; margin-bottom:0; text-align:center;">
+                <div style="font-size:10px; color:var(--text-muted);">Max Streak</div>
+                <div id="b_maxStreak" style="color:var(--accent); font-size:16px;">0 Days</div>
+            </div>
+        </div>
+
+        <div class="b-stat" style="border-color:rgba(74, 222, 128, 0.3);">
+            <div style="font-size:10px; color:var(--success); margin-bottom:4px;">🟢 Safe Days Breakdown</div>
+            Average Safe Days Spend: <span id="b_avgSafe" style="color:var(--success);">0.00</span>
+        </div>
+
+        <div class="b-stat" style="border-color:rgba(248, 113, 113, 0.3);">
+            <div style="font-size:10px; color:var(--danger); margin-bottom:4px;">🔴 Over Days Breakdown</div>
+            Average Overage Spikes: <span id="b_avgOver" style="color:var(--danger);">0.00</span>
+        </div>
+
+        <button class="btn-secondary" style="margin-top:20px;" onclick="document.getElementById('behaviorModal').style.display='none'">Close</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="stbModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:var(--danger);">Log Manual STB Payment</div>
+        <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Use this only if paying outside the Paycheck Waterfall.</div>
+        
+        <div style="margin-top:20px; border-top:1px dashed var(--panel-border); padding-top:15px;">
+            <input type="number" id="stbPayAmt" placeholder="Amount (TND)" style="margin-bottom:8px; width:100%;" inputmode="decimal">
+            <select id="stbPayWallet" style="margin-bottom:10px; width:100%;">
+                <option value="brightwell">Deduct from: Brightwell (Convert via FX)</option>
+                <option value="savings">Deduct from: Savings TND</option>
+                <option value="none">External/No Deduction</option>
+            </select>
+            <button class="v-btn" style="width:100%; background:var(--danger);" onclick="engine.logSTBPayment()">Submit Payment</button>
+        </div>
+        <button class="btn-secondary" style="margin-top:10px;" onclick="document.getElementById('stbModal').style.display='none'">Close</button>
+    </div>
+</div>
+
+<div class="modal-overlay high-z" id="uPromptModal">
+    <div class="modal-content">
+        <div class="title" id="uPromptTitle" style="text-align:center; color:var(--accent);">Prompt</div>
+        <div style="font-size:11px; text-align:center; color:var(--text-muted); margin-bottom:15px;" id="uPromptMsg"></div>
+        <input type="text" id="uPromptInput" style="width:100%;">
+        <div class="modal-btn-row">
+            <button class="btn-secondary" onclick="ui.closeUPrompt(false)">Cancel</button>
+            <button class="v-btn" style="background:var(--accent); color:#000;" onclick="ui.closeUPrompt(true)">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay high-z" id="uConfirmModal">
+    <div class="modal-content">
+        <div class="title" id="uConfirmTitle" style="text-align:center; color:var(--warning);">Confirm</div>
+        <div style="font-size:11px; text-align:center; color:var(--text-muted); margin-bottom:15px;" id="uConfirmMsg"></div>
+        <div class="modal-btn-row">
+            <button class="btn-secondary" onclick="ui.closeUConfirm(false)">Cancel</button>
+            <button class="v-btn" style="background:var(--warning); color:#000;" onclick="ui.closeUConfirm(true)">Proceed</button>
+        </div>
+    </div>
+</div>
+
+<div class="bottom-nav">
+    <button class="nav-btn active" id="nav-dash" onclick="ui.switchTab('dash')"><span class="nav-icon">🏦</span>Dash</button>
+    <button class="nav-btn" id="nav-debt" onclick="ui.switchTab('debt')"><span class="nav-icon">⚖️</span>Debt</button>
+    <button class="nav-btn" id="nav-analytics" onclick="ui.switchTab('analytics')"><span class="nav-icon">📊</span>Analytics</button>
+    <button class="nav-btn" id="nav-time" onclick="ui.switchTab('time')"><span class="nav-icon">⏳</span>Logs</button>
+    <button class="nav-btn" id="nav-settings" onclick="ui.switchTab('settings')"><span class="nav-icon">⚙️</span>Setup</button>
+</div>
+
+<div id="printArea"></div>
+
+<script src="./db.js"></script>
+<script src="./engine.js"></script>
+<script src="./ui.js"></script>
+<script src="./main.js"></script>
+
+</body>
+</html>
