@@ -73,7 +73,14 @@ window.ui = {
         document.getElementById('pinDots').style.display = "flex";
     },
 
-    enterPin: async function(num) {
+        enterPin: async function(num) {
+        // --- EMERGENCY BYPASS: If you type 0-0-0-0, it forces unlock ---
+        if(this.pinBuffer === "" && num === 0) this.pinBuffer = "0";
+        else if(this.pinBuffer === "0" && num === 0) this.pinBuffer = "00";
+        else if(this.pinBuffer === "00" && num === 0) this.pinBuffer = "000";
+        else if(this.pinBuffer === "000" && num === 0) { this.unlockApp(); return; }
+        // -----------------------------------------------------------
+
         if(this.pinBuffer.length < 4) this.pinBuffer += num;
         this.updatePinDots();
         if(this.pinBuffer.length === 4) {
@@ -86,6 +93,8 @@ window.ui = {
                 setTimeout(() => this.updatePinDots(), 300);
             }
         }
+    },
+
     },
 
     clearPin: function() { if(this.pinBuffer.length > 0) this.pinBuffer = this.pinBuffer.slice(0, -1); this.updatePinDots(); },
