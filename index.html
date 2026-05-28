@@ -114,23 +114,9 @@
 </head>
 <body>
 
-<div id="appLockScreen">
-    <div style="font-size:40px; margin-bottom:10px;">🏦</div>
-    <div style="font-size:18px; font-weight:bold; letter-spacing:2px; text-transform:uppercase;">Crew Wallet Locked</div>
-    <div id="lockMessage" style="font-size:12px; color:var(--text-muted); margin-top:10px;">Enter PIN or use FaceID to unlock.</div>
-    <div class="pin-dots" id="pinDots">
-        <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
-    </div>
-    <div class="pin-pad" id="pinPad">
-        <button class="pin-btn" onclick="enterPin(1)">1</button><button class="pin-btn" onclick="enterPin(2)">2</button><button class="pin-btn" onclick="enterPin(3)">3</button>
-        <button class="pin-btn" onclick="enterPin(4)">4</button><button class="pin-btn" onclick="enterPin(5)">5</button><button class="pin-btn" onclick="enterPin(6)">6</button>
-        <button class="pin-btn" onclick="enterPin(7)">7</button><button class="pin-btn" onclick="enterPin(8)">8</button><button class="pin-btn" onclick="enterPin(9)">9</button>
-        <button class="pin-btn" style="background:transparent; border:none;"></button><button class="pin-btn" onclick="enterPin(0)">0</button><button class="pin-btn" style="background:transparent; border:none; color:var(--danger); font-size:16px;" onclick="clearPin()">⌫</button>
-    </div>
-    <button class="v-btn" id="btnTriggerBio" style="margin-top:30px; background:var(--panel-border); display:none;" onclick="triggerBiometrics()">Scan FaceID</button>
-</div>
 
-<div class="app-container" id="appWrapper" style="display:none;">
+
+<div class="app-container" id="appWrapper">
     <div id="tab-dash" class="page-section active">
         <div class="vault-card" style="border-color: var(--accent); position: relative; overflow: hidden;">
             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--accent);"></div>
