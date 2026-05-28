@@ -1,5 +1,5 @@
 // ==========================================
-// DB.JS - STANDARD VAULT (V38)
+// DB.JS - STANDARD VAULT (V42)
 // ==========================================
 
 window.s = null;
@@ -9,23 +9,15 @@ const STORE_NAME = 'stateStore';
 window.db = {
     initDB: function() {
         return new Promise((resolve, reject) => {
-            console.log("DB: Opening vault...");
             let request = indexedDB.open(DB_NAME, 1);
             request.onupgradeneeded = (e) => {
                 let database = e.target.result;
                 if (!database.objectStoreNames.contains(STORE_NAME)) {
                     database.createObjectStore(STORE_NAME);
-                    console.log("DB: Vault created.");
                 }
             };
-            request.onsuccess = (e) => {
-                console.log("DB: Vault opened successfully.");
-                resolve(e.target.result);
-            };
-            request.onerror = (e) => {
-                console.error("DB: Vault access denied:", e.target.error);
-                reject(e.target.error);
-            };
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e.target.error);
         });
     },
 
@@ -38,10 +30,8 @@ window.db = {
             request.onsuccess = () => {
                 if (request.result) { 
                     window.s = JSON.parse(request.result); 
-                    console.log("DB: State loaded from vault.");
                     window.engine.renderApp(); 
                 } else { 
-                    console.log("DB: No state found, loading pristine.");
                     this.fallbackLoad(); 
                 }
             };
@@ -50,22 +40,42 @@ window.db = {
     },
 
     fallbackLoad: function() {
-        // Only load pristine data if no vault exists
-        window.s = { "vault": { "ibkr": 0, "brightwell": 0, "wise": 0, "cash_usd": 0, "cash_tnd": 0, "savings": 0, "ibkr_cash": 0, "ibkr_shares": 0, "ibkr_cost": 0, "ibkr_price": 0 }, "loan": { "arrears": 0, "overdraft": 0, "rate": 13.5, "schedule": [], "targetDate": "" }, "ious": { "payables": [], "receivables": [] }, "history": { "vacation": { "archive": [], "current": [], "limit": 49 }, "onboard": { "archive": [], "current": [], "limit": 7.25 } }, "mode": "vacation", "fx_rate": 2.923, "projects": { "envelopes": {}, "missions": {}, "goals": [] }, "settings": { "pin": "" }, "vape_stash": { "count": 0, "empty_logs": [] }, "custom_categories": [], "income_logs": [], "ledger": [] };
-        console.log("DB: Pristine state initialized.");
+        // Pre-configured payload mapped to your specific timeline and goals
+        window.s = { 
+            "vault": { "ibkr": 0, "brightwell": 0, "wise": 0, "cash_usd": 0, "cash_tnd": 0, "savings": 0, "ibkr_cash": 0, "ibkr_shares": 0, "ibkr_cost": 0, "ibkr_price": 0, "lifetime_fees": 0 }, 
+            "loan": { "arrears": 0, "overdraft": 0, "rate": 13.5, "schedule": [], "targetDate": "2026-11", "last_interest_ts": Date.now() }, 
+            "ious": { "payables": [], "receivables": [] }, 
+            "history": { "vacation": { "archive": [], "current": [], "limit": 49 }, "onboard": { "archive": [], "current": [], "limit": 7.25 } }, 
+            "mode": "vacation", 
+            "fx_rate": 2.923, 
+            "capital_saved_tnd": 0,
+            "capital_saved_usd": 0,
+            "projects": { 
+                "envelopes": {}, 
+                "missions": {
+                    "p_infra": { "name": "🎯 Port Infrastructure Tender Report", "spent": 0, "dead": 0, "hasLogistics": false, "archived": false, "bypass": false, "currency": "TND" }
+                }, 
+                "goals": [
+                    { "id": 1, "name": "🏆 Used Toyota RAV4 Fund", "target": 50000, "saved": 0, "archived": false, "currency": "TND" }
+                ] 
+            }, 
+            "settings": { "contractStart": "2026-08-03", "contractEnd": "2027-02-01", "vacationStart": "2026-05-15", "vacationEnd": "2026-08-02", "pin": "" }, 
+            "vape_stash": { "count": 0, "empty_logs": [] }, 
+            "custom_categories": ["⛽ Car Fuel", "📱 Telecommunications", "🚢 Visa & Seaman Docs"], 
+            "income_logs": [], 
+            "ledger": [] 
+        };
         window.engine.renderApp();
     },
 
     forceSaveState: async function() {
-        console.log("DB: Saving state...");
         let dataStr = JSON.stringify(window.s);
         try {
             let database = await this.initDB();
             let tx = database.transaction(STORE_NAME, 'readwrite');
             let store = tx.objectStore(STORE_NAME);
             store.put(dataStr, 'master_data');
-            console.log("DB: State saved.");
-        } catch (e) { console.error("DB: Save failed.", e); }
+        } catch (e) { console.error("DB Save failed", e); }
     },
 
     saveState: async function() {
