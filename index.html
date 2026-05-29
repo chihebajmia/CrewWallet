@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0f172a">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon.png">
-    <title>Crew Wallet Master V36</title>
+    <title>Crew Wallet Master V37</title>
     <style>
         :root { --bg-color: #0f172a; --card-bg: #1e293b; --accent: #fbbf24; --text: #f8fafc; --text-muted: #94a3b8; --success: #4ade80; --warning: #facc15; --danger: #f87171; --panel-border: #334155; --vault-bg: rgba(15, 23, 42, 0.5); }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; -webkit-tap-highlight-color: transparent; padding-bottom: 90px; }
@@ -91,7 +91,7 @@
         .pnl-positive { color: var(--success) !important; }
         .pnl-negative { color: var(--danger) !important; }
         
-        /* App Lock Engine - Stripped down for V36 Bypass */
+        /* App Lock Engine permanently bypassed in V36+ */
         #appLockScreen { display: none; }
         
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -136,6 +136,18 @@
                     <div id="cdMain" style="font-size:13px; font-weight:bold; color:var(--accent);">Loading Timeline...</div>
                     <div id="cdSub" style="font-size:10px; color:var(--success); margin-top:2px; display:none;"></div>
                 </div>
+
+                <div style="margin-top:10px; background:var(--card-bg); padding:10px; border-radius:8px; border:1px solid var(--panel-border); display:flex; align-items:center; gap:10px;">
+                    <div style="flex:1;">
+                        <div style="font-size:9px; color:var(--text-muted); font-weight:bold; margin-bottom:2px;">USD ($)</div>
+                        <input type="number" id="convUSD" placeholder="0.00" oninput="runConverter('usd')" inputmode="decimal" style="padding:8px; text-align:center; font-weight:bold; font-size:14px; border-color:#38bdf8;">
+                    </div>
+                    <div style="font-size:14px; color:var(--text-muted);">🔄</div>
+                    <div style="flex:1;">
+                        <div style="font-size:9px; color:var(--text-muted); font-weight:bold; margin-bottom:2px;">TND</div>
+                        <input type="number" id="convTND" placeholder="0.00" oninput="runConverter('tnd')" inputmode="decimal" style="padding:8px; text-align:center; font-weight:bold; font-size:14px; border-color:var(--success);">
+                    </div>
+                </div>
             </div>
 
             <div class="vault-grid">
@@ -150,6 +162,7 @@
                 <div class="vault-item"><span class="v-lbl">Cash (TND)</span><span class="v-val" id="v_cash_tnd">0.00</span></div>
                 <div class="vault-item"><span class="v-lbl">Savings (TND)</span><span class="v-val" id="v_savings">0.00</span></div>
             </div>
+            
             <div class="vault-actions">
                 <button class="v-btn" style="background:#16a34a;" onclick="openPaycheckModal()">💵 Paycheck</button>
                 <button class="v-btn" onclick="openIncomeModal()">📥 Deposit</button>
@@ -157,6 +170,7 @@
                 <button class="v-btn" onclick="openTransferModal()">🔄 Transfer</button>
                 <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="openSweepModal()">📈 Sweep</button>
                 <button class="v-btn" style="background:var(--accent); color:#000;" onclick="openATMModal()">🏧 ATM</button>
+                <button class="v-btn" style="background:#334155; grid-column: span 3;" onclick="vaultExchange()">💱 Exchange Physical Cash (USD↔TND)</button>
             </div>
             <button style="background:none; border:none; color:var(--text-muted); font-size:10px; cursor:pointer; width:100%; text-align:center; margin-top:12px; text-decoration:underline;" onclick="document.getElementById('editModal').style.display='flex'">✏️ Manual Override Balances</button>
         </div>
@@ -257,6 +271,7 @@
             </div>
 
             <button class="btn-secondary" style="margin-top:15px; border-color:var(--danger); color:var(--danger);" onclick="openSTBModal()">Log Direct Manual Payment</button>
+            <button class="btn-secondary" style="margin-top:8px; border-color:#38bdf8; color:#38bdf8;" onclick="openSTBSimulator()">🔮 Open Payoff Simulator</button>
         </div>
 
         <div class="vault-card" style="border-color: rgba(220, 38, 38, 0.4);">
@@ -487,7 +502,6 @@
         <input type="number" id="pwGross" placeholder="Gross Pay (USD)" style="font-size:20px; font-weight:bold; text-align:center;" inputmode="decimal" oninput="calcPaycheck('gross', null)">
         
         <div style="margin-top:20px; background:var(--vault-bg); padding:12px; border-radius:8px; border:1px solid var(--panel-border);">
-            
             <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; align-items:center;">
                 <span style="color:var(--danger); display:flex; align-items:center; gap:4px;">🚨 STB Auto-Wire 
                     <input type="number" id="pwLoanPct" value="40" style="width:45px; padding:4px; font-size:12px; text-align:center; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="calcPaycheck('pct', 'loan')">%
@@ -642,7 +656,6 @@
 <div class="modal-overlay" id="behaviorModal">
     <div class="modal-content">
         <div class="title" style="text-align:center; font-size:12px; color:white;">Behavioral Insights</div>
-        
         <div style="display:flex; justify-content:space-between; gap:10px; margin-bottom:10px;">
             <div class="b-stat" style="flex:1; margin-bottom:0; text-align:center;">
                 <div style="font-size:10px; color:var(--text-muted);">Current Streak</div>
@@ -653,17 +666,14 @@
                 <div id="b_maxStreak" style="color:var(--accent); font-size:16px;">0 Days</div>
             </div>
         </div>
-
         <div class="b-stat" style="border-color:rgba(74, 222, 128, 0.3);">
             <div style="font-size:10px; color:var(--success); margin-bottom:4px;">🟢 Safe Days Breakdown</div>
             Average Safe Days Spend: <span id="b_avgSafe" style="color:var(--success);">0.00</span>
         </div>
-
         <div class="b-stat" style="border-color:rgba(248, 113, 113, 0.3);">
             <div style="font-size:10px; color:var(--danger); margin-bottom:4px;">🔴 Over Days Breakdown</div>
             Average Overage Spikes: <span id="b_avgOver" style="color:var(--danger);">0.00</span>
         </div>
-
         <button class="btn-secondary" style="margin-top:20px;" onclick="document.getElementById('behaviorModal').style.display='none'">Close</button>
     </div>
 </div>
@@ -672,7 +682,6 @@
     <div class="modal-content">
         <div class="title" style="text-align:center; font-size:12px; color:var(--danger);">Log Manual STB Payment</div>
         <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Use this only if paying outside the Paycheck Waterfall.</div>
-        
         <div style="margin-top:20px; border-top:1px dashed var(--panel-border); padding-top:15px;">
             <input type="number" id="stbPayAmt" placeholder="Amount (TND)" style="margin-bottom:8px; width:100%;" inputmode="decimal">
             <select id="stbPayWallet" style="margin-bottom:10px; width:100%;">
@@ -683,6 +692,30 @@
             <button class="v-btn" style="width:100%; background:var(--danger);" onclick="logSTBPayment()">Submit Payment</button>
         </div>
         <button class="btn-secondary" style="margin-top:10px;" onclick="document.getElementById('stbModal').style.display='none'">Close</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="stbSimModal">
+    <div class="modal-content">
+        <div class="title" style="text-align:center; font-size:12px; color:#38bdf8;">🔮 STB Payoff Simulator</div>
+        <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Game out extra monthly payments safely.</div>
+        
+        <div class="modal-input-group">
+            <label>Base Monthly Payment (TND)</label>
+            <input type="number" id="simBase" value="1010" inputmode="decimal" oninput="runSTBSimulator()">
+        </div>
+        <div class="modal-input-group" style="margin-top:10px;">
+            <label style="color:var(--success);">EXTRA Monthly Payment (TND)</label>
+            <input type="number" id="simExtra" value="0" inputmode="decimal" style="border-color:var(--success);" oninput="runSTBSimulator()">
+        </div>
+        
+        <div style="margin-top:20px; background:var(--vault-bg); padding:12px; border-radius:8px; border:1px solid var(--panel-border); text-align:center;">
+            <div style="font-size:10px; color:var(--text-muted);">Estimated Payoff Date</div>
+            <div id="simResultDate" style="font-size:18px; font-weight:bold; color:var(--success); margin:5px 0;">--</div>
+            <div style="font-size:11px; color:var(--accent);">Total Interest Paid: <span id="simResultInterest">0.00 TND</span></div>
+            <div style="font-size:9px; color:var(--text-muted); margin-top:5px;">Assumes 13.5% rate and no missed payments.</div>
+        </div>
+        <button class="btn-secondary" style="margin-top:15px;" onclick="document.getElementById('stbSimModal').style.display='none'">Close Simulator</button>
     </div>
 </div>
 
@@ -718,7 +751,7 @@
 </div>
 
 <div id="printArea"></div>
-  <script>
+<script>
     // ==========================================
     // 0. SERVICE WORKER & NETWORK TRACKER
     // ==========================================
@@ -737,14 +770,9 @@
     if (!navigator.onLine) document.getElementById('offlineBadge').style.display = 'inline';
 
     // ==========================================
-    // 1. DATA, INDEXED-DB & BASELINE (V36)
+    // 1. DATA, INDEXED-DB & BASELINE (V37)
     // ==========================================
-    async function hashPin(pin) {
-        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
-        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    // V36 Update: Pristine Baseline Hardcoded to current timeline
+    // V37 Update: PIN & Security engine completely purged from pristine data
     const USER_PRISTINE_DATA = {
         "vault":{"ibkr":0,"brightwell":0,"wise":0,"cash_usd":0,"cash_tnd":0,"savings":0,"ibkr_fees":0,"lifetime_fees":0, "ibkr_cash":0, "ibkr_shares":0, "ibkr_cost":0, "ibkr_price":0},
         "loan":{
@@ -771,8 +799,7 @@
             "contractStart":"2026-08-03",
             "contractEnd":"2027-02-01", 
             "vacationStart":"2026-05-15", 
-            "vacationEnd":"2026-08-02", 
-            "pin": ""
+            "vacationEnd":"2026-08-02"
         },
         "vape_stash":{"count":0, "empty_logs":[]},
         "custom_categories":[]
@@ -842,11 +869,6 @@
         if(s.vault.ibkr_shares === undefined) s.vault.ibkr_shares = 0;
         if(s.vault.ibkr_cost === undefined) s.vault.ibkr_cost = 0;
         if(s.vault.ibkr_price === undefined) s.vault.ibkr_price = 805.79;
-
-        if (s.settings.pin && s.settings.pin.length === 4) {
-            s.settings.pin = await hashPin(s.settings.pin);
-            await forceSaveState();
-        }
 
         if (!s.loan.overdraft) s.loan.overdraft = 0;
         if (!s.loan.last_interest_ts) s.loan.last_interest_ts = Date.now();
@@ -950,10 +972,9 @@
     function closeUConfirm(isOk) { document.getElementById('uConfirmModal').style.display = 'none'; if(resolveConfirm) resolveConfirm(isOk); }
 
     // ==========================================
-    // 2. SECURITY (V36 AMPUTATION)
+    // 2. SECURITY (V37 BYPASS)
     // ==========================================
     function checkLock() {
-        // V36: Security lock permanently bypassed. Boots directly to UI.
         document.getElementById('appLockScreen').style.display = 'none';
         document.getElementById('appWrapper').style.display = 'flex';
         renderApp();
@@ -1083,6 +1104,106 @@
         let n = parseFloat(val);
         if(!isNaN(n) && n > 0) { p.amount = n; saveState(); }
     }
+
+    // V37 Fix: Wiring up the previously dead addInstallment button
+    async function addInstallment() {
+        let dateStr = await openUPrompt("New Installment", "Enter Date (e.g., Dec 31, 2026):");
+        if(!dateStr) return;
+        let amtStr = await openUPrompt("Amount", "Enter Amount in TND:", "1010");
+        let amt = parseFloat(amtStr);
+        if(isNaN(amt) || amt <= 0) return;
+        
+        s.loan.schedule.push({ id: Date.now(), date: dateStr, amount: amt, paid: false });
+        s.loan.schedule.sort((a, b) => new Date(a.date) - new Date(b.date));
+        saveState();
+    }
+    // V37 Upgrade: Persistent TND/USD Converter Logic
+    function runConverter(source) {
+        let usdInp = document.getElementById('convUSD');
+        let tndInp = document.getElementById('convTND');
+        let fx = s.fx_rate || 2.923;
+        
+        if (source === 'usd') {
+            let val = parseFloat(usdInp.value);
+            if (!isNaN(val)) tndInp.value = (val * fx).toFixed(2);
+            else tndInp.value = '';
+        } else {
+            let val = parseFloat(tndInp.value);
+            if (!isNaN(val)) usdInp.value = (val / fx).toFixed(2);
+            else usdInp.value = '';
+        }
+    }
+
+    // V37 Upgrade: STB Payoff Simulator Sandbox
+    function openSTBSimulator() {
+        document.getElementById('stbSimModal').style.display = 'flex';
+        runSTBSimulator();
+    }
+
+    function runSTBSimulator() {
+        let basePay = parseFloat(document.getElementById('simBase').value) || 0;
+        let extraPay = parseFloat(document.getElementById('simExtra').value) || 0;
+        let totalMonthlyPay = basePay + extraPay;
+        
+        let resultDateEl = document.getElementById('simResultDate');
+        let resultIntEl = document.getElementById('simResultInterest');
+
+        if (totalMonthlyPay <= 0) {
+            resultDateEl.innerText = "Payment too low";
+            resultDateEl.style.color = "var(--danger)";
+            resultIntEl.innerText = "0.00 TND";
+            return;
+        }
+
+        // Sandbox Variables (Protects actual database)
+        let simArrears = s.loan.arrears;
+        let simOverdraft = s.loan.overdraft;
+        let unpaidsTND = s.loan.schedule.filter(x => !x.paid).reduce((sum, item) => sum + item.amount, 0);
+        let simPrincipal = simArrears + simOverdraft + unpaidsTND;
+        
+        let simInterestPaid = 0;
+        let months = 0;
+        let maxMonths = 360; // 30-Year Circuit Breaker to prevent browser freeze
+        let annualRate = (s.loan.rate || 13.5) / 100;
+
+        while (simPrincipal > 0 && months < maxMonths) {
+            // STB only applies interest to the Arrears block (schedule amounts are already amortized)
+            let monthlyInterest = simArrears * (annualRate / 12);
+            simInterestPaid += monthlyInterest;
+            simArrears += monthlyInterest;
+
+            let paymentRemaining = totalMonthlyPay;
+            
+            if (simOverdraft > 0) {
+                if (paymentRemaining >= simOverdraft) { paymentRemaining -= simOverdraft; simOverdraft = 0; }
+                else { simOverdraft -= paymentRemaining; paymentRemaining = 0; }
+            }
+            if (simArrears > 0 && paymentRemaining > 0) {
+                if (paymentRemaining >= simArrears) { paymentRemaining -= simArrears; simArrears = 0; }
+                else { simArrears -= paymentRemaining; paymentRemaining = 0; }
+            }
+            if (unpaidsTND > 0 && paymentRemaining > 0) {
+                if (paymentRemaining >= unpaidsTND) { paymentRemaining -= unpaidsTND; unpaidsTND = 0; }
+                else { unpaidsTND -= paymentRemaining; paymentRemaining = 0; }
+            }
+            
+            simPrincipal = simArrears + simOverdraft + unpaidsTND;
+            months++;
+        }
+
+        if (months >= maxMonths) {
+            resultDateEl.innerText = "Exceeds 30 Years";
+            resultDateEl.style.color = "var(--danger)";
+        } else {
+            let d = new Date();
+            d.setMonth(d.getMonth() + months);
+            let monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            resultDateEl.innerText = monthNames[d.getMonth()] + " " + d.getFullYear();
+            resultDateEl.style.color = "var(--success)";
+        }
+        resultIntEl.innerText = simInterestPaid.toFixed(2) + " TND";
+    }
+
     // V36 STB Kill Shot Math Adjustment
     function calculateKillShot() {
         let targetDateStr = document.getElementById('l_target_date').value;
@@ -1136,7 +1257,6 @@
         applyTheme(); populateCategories(); populateProjectDropdowns(); calculateBehavioralStreaks(); checkVapeField('adv'); checkVapeField('tm');
         processInterestBleed(); 
         
-        // V36 Dynamic Countdowns injection
         let cdMain = document.getElementById('cdMain');
         let cdSub = document.getElementById('cdSub');
         let cdTitle = document.getElementById('cdTitle');
@@ -1164,7 +1284,6 @@
                 cdMain.innerText = "Contract End Not Set";
             }
             
-            // Bi-weekly Carnival Paycheck Tracker starting Aug 21, 2026
             let firstPay = new Date("2026-08-21T00:00:00").getTime();
             if (timeNow < firstPay) {
                 let daysToPay = Math.ceil((firstPay - timeNow) / 86400000);
@@ -1217,7 +1336,6 @@
         let totUSD = ibkrTotal + s.vault.brightwell + s.vault.wise + s.vault.cash_usd; let totTND = (totUSD * s.fx_rate) + s.vault.cash_tnd + s.vault.savings;
         document.getElementById('totUSD').innerText = '$' + totUSD.toFixed(2); document.getElementById('totTND').innerText = totTND.toFixed(2) + ' TND';
 
-        // V36 Dual-Mode Predictive Vape Engine Lock
         let vapeLockedTND = 0;
         let vapeLockedUSD = 0;
         
@@ -1270,7 +1388,6 @@
             }
         });
 
-        // Add the vape projected lock directly into the Envelopes deduction pool
         if (!isUSDMode && vapeLockedTND > 0) activeEnvLocked += vapeLockedTND;
         if (isUSDMode && vapeLockedUSD > 0) activeEnvLocked += vapeLockedUSD;
 
@@ -1392,7 +1509,7 @@
         saveState();
     }
     async function hardDeleteTracker(type, id) {
-        let ok = await openUConfirm("Hard Delete", "Permanently delete this archived tracker? Historical logs will lose their association.");
+        let ok = await openUConfirm("Hard Delete", "Permanently delete this archived tracker?");
         if(!ok) return;
         if(type === 'env') delete s.projects.envelopes[id];
         if(type === 'mis') delete s.projects.missions[id];
@@ -1991,7 +2108,6 @@
         bd.innerHTML = html;
     }
 
-    // V36 Dual-Mode Vape Predictor Updates
     function renderVapeStats() {
         const bd = document.getElementById('vapeStatsHtml'); if (!bd) return;
         let vLogs = [];
@@ -2080,14 +2196,8 @@
         s.settings.vacationEnd = document.getElementById('setVacationEnd').value;
         saveState(); 
     }
-    
-    async function updatePin() { 
-        let raw = document.getElementById('setPin').value; 
-        if(raw.length === 4) { s.settings.pin = await hashPin(raw); saveState(); }
-        document.getElementById('setPin').value = '';
-        document.getElementById('setPin').placeholder = '****';
-    }
 
+    // V37 Fix: populateSettings no longer looks for the deleted PIN element
     function populateSettings() { 
         document.getElementById('setMode').value = s.mode; 
         document.getElementById('setVacLimit').value = s.history.vacation.limit; 
@@ -2097,8 +2207,6 @@
         document.getElementById('setContractEnd').value = s.settings.contractEnd || ''; 
         document.getElementById('setVacationStart').value = s.settings.vacationStart || ''; 
         document.getElementById('setVacationEnd').value = s.settings.vacationEnd || ''; 
-        document.getElementById('setPin').value = ''; 
-        document.getElementById('setPin').placeholder = s.settings.pin ? '****' : '0000';
     }
 
     function changeMode() { s.mode = document.getElementById('setMode').value; saveState(); }
