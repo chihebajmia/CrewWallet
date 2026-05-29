@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0f172a">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon.png">
-    <title>Crew Wallet Master V35</title>
+    <title>Crew Wallet Master V36</title>
     <style>
         :root { --bg-color: #0f172a; --card-bg: #1e293b; --accent: #fbbf24; --text: #f8fafc; --text-muted: #94a3b8; --success: #4ade80; --warning: #facc15; --danger: #f87171; --panel-border: #334155; --vault-bg: rgba(15, 23, 42, 0.5); }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; -webkit-tap-highlight-color: transparent; padding-bottom: 90px; }
@@ -91,15 +91,9 @@
         .pnl-positive { color: var(--success) !important; }
         .pnl-negative { color: var(--danger) !important; }
         
-        /* App Lock Engine */
-        #appLockScreen { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
-        .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 30px; width: 100%; max-width: 250px; }
-        .pin-btn { background: var(--card-bg); color: white; border: 1px solid var(--panel-border); border-radius: 50%; width: 60px; height: 60px; font-size: 24px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; margin: 0 auto; transition: transform 0.1s, background 0.1s; }
-        .pin-btn:active { transform: scale(0.9); background: var(--accent); color: #000; }
-        .pin-dots { display: flex; gap: 10px; margin-top: 20px; }
-        .pin-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--panel-border); background: transparent; transition: background 0.2s; }
-        .pin-dot.filled { background: var(--accent); border-color: var(--accent); }
-
+        /* App Lock Engine - Stripped down for V36 Bypass */
+        #appLockScreen { display: none; }
+        
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideInLeft { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
         @keyframes slideUpModal { from { opacity: 0; transform: translateY(40px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -114,9 +108,9 @@
 </head>
 <body>
 
+<div id="appLockScreen" style="display:none;"></div>
 
-
-<div class="app-container" id="appWrapper">
+<div class="app-container" id="appWrapper" style="display:flex;">
     <div id="tab-dash" class="page-section active">
         <div class="vault-card" style="border-color: var(--accent); position: relative; overflow: hidden;">
             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--accent);"></div>
@@ -135,6 +129,12 @@
                 <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px dashed var(--panel-border); padding-top:8px;">
                     <div style="font-size:10px; color:var(--text-muted); text-align:left;">Total USD Assets:<br><strong id="totUSD" style="color:var(--text); font-size:13px;">$0.00</strong></div>
                     <div style="font-size:10px; color:var(--text-muted); text-align:right;">Total Wealth:<br><strong id="totTND" style="color:var(--success); font-size:13px;">0.00 TND</strong></div>
+                </div>
+                
+                <div id="dynamicCountdownBox" style="margin-top:10px; background:rgba(15, 23, 42, 0.4); padding:8px; border-radius:8px; border:1px dashed var(--panel-border); text-align:center;">
+                    <div id="cdTitle" style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Timeline Context</div>
+                    <div id="cdMain" style="font-size:13px; font-weight:bold; color:var(--accent);">Loading Timeline...</div>
+                    <div id="cdSub" style="font-size:10px; color:var(--success); margin-top:2px; display:none;"></div>
                 </div>
             </div>
 
@@ -249,7 +249,7 @@
                 <div style="font-size:10px; color:var(--text-muted); margin-bottom:5px;">Target Zero Date (Optional):</div>
                 <input type="month" id="l_target_date" onchange="calculateKillShot()" style="margin-bottom:10px; padding:8px;">
                 <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px;">
-                    <span>Months Left:</span> <strong id="l_months_left" style="font-size:13px;">0</strong>
+                    <span>Active Months Left:</span> <strong id="l_months_left" style="font-size:13px;">0</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:11px;">
                     <span>Monthly "Kill Shot" Req:</span> <strong id="l_kill_shot" style="color:var(--warning); font-size:13px;">0.00 TND</strong>
@@ -399,12 +399,6 @@
         <div class="vault-card">
             <div class="title">Custom Categories</div>
             <button class="btn-secondary" onclick="manageCategories()">🛠️ Manage Custom Categories</button>
-        </div>
-
-        <div class="vault-card">
-            <div class="title" style="color:var(--accent);">Security</div>
-            <div class="input-row" style="margin-bottom:10px;"><span style="font-size:12px; width:100%;">App Lock PIN:</span><input type="password" id="setPin" maxlength="4" onchange="updatePin()" placeholder="0000"></div>
-            <button class="btn-secondary" style="border-color:var(--accent); color:var(--accent);" onclick="registerFaceID()">🛡️ Enable FaceID / TouchID</button>
         </div>
 
         <div class="vault-card">
@@ -743,13 +737,14 @@
     if (!navigator.onLine) document.getElementById('offlineBadge').style.display = 'inline';
 
     // ==========================================
-    // 1. DATA, INDEXED-DB & CRYPTO ENGINE (V35)
+    // 1. DATA, INDEXED-DB & BASELINE (V36)
     // ==========================================
     async function hashPin(pin) {
         const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
         return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
+    // V36 Update: Pristine Baseline Hardcoded to current timeline
     const USER_PRISTINE_DATA = {
         "vault":{"ibkr":0,"brightwell":0,"wise":0,"cash_usd":0,"cash_tnd":0,"savings":0,"ibkr_fees":0,"lifetime_fees":0, "ibkr_cash":0, "ibkr_shares":0, "ibkr_cost":0, "ibkr_price":0},
         "loan":{
@@ -772,7 +767,13 @@
         "history":{"vacation":{"archive":[],"current":[],"limit":35,"balance":35},"onboard":{"archive":[],"current":[],"limit":7.25,"balance":7.25}},
         "capital_saved_tnd":0, "capital_saved_usd":0, "fx_rate":2.923,"mode":"vacation","income_logs":[],
         "projects":{"envelopes":{},"missions":{},"goals":[]},
-        "settings":{"contractStart":"","contractEnd":"", "vacationStart":"", "vacationEnd":"", "pin": ""},
+        "settings":{
+            "contractStart":"2026-08-03",
+            "contractEnd":"2027-02-01", 
+            "vacationStart":"2026-05-15", 
+            "vacationEnd":"2026-08-02", 
+            "pin": ""
+        },
         "vape_stash":{"count":0, "empty_logs":[]},
         "custom_categories":[]
     };
@@ -825,8 +826,10 @@
         if (!s.vape_stash.empty_logs) s.vape_stash.empty_logs = []; 
         if (!s.custom_categories) s.custom_categories = [];
         
-        if (s.settings.vacationStart === undefined) s.settings.vacationStart = "";
-        if (s.settings.vacationEnd === undefined) s.settings.vacationEnd = "";
+        if (s.settings.vacationStart === undefined) s.settings.vacationStart = "2026-05-15";
+        if (s.settings.vacationEnd === undefined) s.settings.vacationEnd = "2026-08-02";
+        if (!s.settings.contractStart) s.settings.contractStart = "2026-08-03";
+        if (!s.settings.contractEnd) s.settings.contractEnd = "2027-02-01";
 
         if (s.capital_saved_tnd === undefined) {
             s.capital_saved_tnd = (s.capital_saved !== undefined) ? s.capital_saved : 0;
@@ -889,7 +892,6 @@
         }
     }
 
-    // V35 Automated Vacation Arrears Shifter
     function processVacationArrears() {
         if(!s.settings.vacationStart || !s.settings.vacationEnd) return;
         let vStart = new Date(s.settings.vacationStart).getTime();
@@ -899,7 +901,6 @@
 
         s.loan.schedule.forEach(inst => {
             if(!inst.paid) {
-                // Approximate installment timestamp to the 28th of its month to catch late-month schedules safely
                 let dParts = inst.date.split(' ');
                 if(dParts.length === 3) {
                     let estDate = new Date(`${dParts[0]} 28, ${dParts[2]}`).getTime();
@@ -949,111 +950,14 @@
     function closeUConfirm(isOk) { document.getElementById('uConfirmModal').style.display = 'none'; if(resolveConfirm) resolveConfirm(isOk); }
 
     // ==========================================
-    // 2. SECURITY & APP LOCK
+    // 2. SECURITY (V36 AMPUTATION)
     // ==========================================
-    let pinBuffer = "";
-    let bioAttempts = 0;
-    let lastActive = Date.now();
-    let isLocked = false;
-    let hasBiometricsEnabled = localStorage.getItem('cw_bio_enabled') === 'true';
-
     function checkLock() {
-        if (!s.settings.pin || s.settings.pin === "") { unlockApp(); return; }
-        isLocked = true;
-        document.getElementById('appLockScreen').style.display = 'flex';
-        document.getElementById('appWrapper').style.display = 'none';
-        
-        if (hasBiometricsEnabled) {
-            document.getElementById('btnTriggerBio').style.display = 'block';
-            triggerBiometrics();
-        } else {
-            document.getElementById('btnTriggerBio').style.display = 'none';
-            showPinPad();
-        }
-    }
-
-    async function registerFaceID() {
-        if (!window.PublicKeyCredential) { await openUConfirm("Error", "Biometrics not supported on this device."); return; }
-        try {
-            const challenge = new Uint8Array(32); crypto.getRandomValues(challenge);
-            const userID = new Uint8Array(16); crypto.getRandomValues(userID);
-            const credential = await navigator.credentials.create({
-                publicKey: {
-                    challenge: challenge,
-                    rp: { name: "Crew Wallet Master", id: window.location.hostname },
-                    user: { id: userID, name: "owner", displayName: "Owner" },
-                    pubKeyCredParams: [{ type: "public-key", alg: -7 }],
-                    authenticatorSelection: { userVerification: "required" },
-                    timeout: 60000
-                }
-            });
-            if (credential) {
-                localStorage.setItem('cw_bio_enabled', 'true');
-                hasBiometricsEnabled = true;
-                await openUConfirm("Success", "FaceID / TouchID registered successfully.");
-            }
-        } catch (err) {
-            await openUConfirm("Error", "Biometric registration failed or was cancelled.");
-        }
-    }
-
-    async function triggerBiometrics() {
-        if (!window.PublicKeyCredential || !hasBiometricsEnabled) { showPinPad(); return; }
-        try {
-            const challenge = new Uint8Array(32); crypto.getRandomValues(challenge);
-            const credential = await navigator.credentials.get({
-                publicKey: { challenge: challenge, rpId: window.location.hostname, userVerification: "required", timeout: 60000 }
-            });
-            if (credential) unlockApp();
-        } catch (err) {
-            bioAttempts++;
-            if (bioAttempts >= 3) { showPinPad(); } 
-            else { document.getElementById('lockMessage').innerText = `FaceID Failed. Attempts: ${bioAttempts}/3`; document.getElementById('lockMessage').style.color = "var(--danger)"; }
-        }
-    }
-
-    function showPinPad() {
-        document.getElementById('lockMessage').innerText = "Enter PIN to unlock.";
-        document.getElementById('lockMessage').style.color = "var(--warning)";
-        document.getElementById('pinPad').style.display = "grid";
-        document.getElementById('pinDots').style.display = "flex";
-    }
-
-    async function enterPin(num) {
-        if(pinBuffer.length < 4) pinBuffer += num;
-        updatePinDots();
-        if(pinBuffer.length === 4) {
-            let hashed = await hashPin(pinBuffer);
-            if(hashed === s.settings.pin) unlockApp();
-            else {
-                document.getElementById('lockMessage').innerText = "Incorrect PIN. Try again.";
-                document.getElementById('lockMessage').style.color = "var(--danger)";
-                pinBuffer = "";
-                setTimeout(updatePinDots, 300);
-            }
-        }
-    }
-
-    function clearPin() { if(pinBuffer.length > 0) pinBuffer = pinBuffer.slice(0, -1); updatePinDots(); }
-    function updatePinDots() {
-        let dots = document.querySelectorAll('.pin-dot');
-        dots.forEach((dot, idx) => { if(idx < pinBuffer.length) dot.classList.add('filled'); else dot.classList.remove('filled'); });
-    }
-
-    function unlockApp() {
-        isLocked = false; pinBuffer = ""; bioAttempts = 0;
+        // V36: Security lock permanently bypassed. Boots directly to UI.
         document.getElementById('appLockScreen').style.display = 'none';
         document.getElementById('appWrapper').style.display = 'flex';
-        lastActive = Date.now();
         renderApp();
     }
-
-    document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === 'hidden') { lastActive = Date.now(); } 
-        else if (document.visibilityState === 'visible') {
-            if (s.settings.pin && !isLocked && (Date.now() - lastActive > 120000)) checkLock(); 
-        }
-    });
 
     // ==========================================
     // 3. UI NAVIGATION & CATEGORIES
@@ -1160,7 +1064,6 @@
         if (cat === '💨 Vape') box.style.display = 'block'; else box.style.display = 'none';
     }
 
-    // V35 Editing Override Logic
     async function editLoanComponent(comp) {
         let currentVal = (comp === 'arrears') ? s.loan.arrears : s.loan.overdraft;
         let newValStr = await openUPrompt(`Edit ${comp}`, `Current: ${currentVal.toFixed(2)} TND\nEnter new exact amount:`, currentVal.toFixed(2));
@@ -1180,8 +1083,7 @@
         let n = parseFloat(val);
         if(!isNaN(n) && n > 0) { p.amount = n; saveState(); }
     }
-
-    // V35 Target Zero Calculator
+    // V36 STB Kill Shot Math Adjustment
     function calculateKillShot() {
         let targetDateStr = document.getElementById('l_target_date').value;
         if(!targetDateStr) {
@@ -1194,9 +1096,26 @@
 
         let targetDate = new Date(targetDateStr + "-01");
         let now = new Date();
-        let monthsLeft = (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
+        let totalMonthsLeft = (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
 
-        if (monthsLeft <= 0) {
+        // V36 Upgraded Math: Dynamically subtract the vacation window
+        let vacationDeduction = 0;
+        if (s.settings.vacationStart && s.settings.vacationEnd) {
+            let vStart = new Date(s.settings.vacationStart);
+            let vEnd = new Date(s.settings.vacationEnd);
+            if (vEnd > now && vStart < targetDate) {
+                let effectiveStart = vStart > now ? vStart : now;
+                let effectiveEnd = vEnd < targetDate ? vEnd : targetDate;
+                if (effectiveEnd > effectiveStart) {
+                    let daysOfVacation = (effectiveEnd - effectiveStart) / (1000 * 60 * 60 * 24);
+                    vacationDeduction = daysOfVacation / 30.44; // Approx months
+                }
+            }
+        }
+
+        let activeMonthsLeft = Math.max(0, totalMonthsLeft - vacationDeduction);
+
+        if (activeMonthsLeft <= 0) {
             document.getElementById('l_months_left').innerText = "0";
             document.getElementById('l_kill_shot').innerText = "Past Due";
             saveState();
@@ -1206,9 +1125,9 @@
         let unpaidsTND = s.loan.schedule.filter(x => !x.paid).reduce((sum, item) => sum + item.amount, 0);
         let totalTrueDebt = s.loan.arrears + s.loan.overdraft + unpaidsTND;
 
-        let killShot = totalTrueDebt / monthsLeft;
+        let killShot = totalTrueDebt / activeMonthsLeft;
 
-        document.getElementById('l_months_left').innerText = monthsLeft;
+        document.getElementById('l_months_left').innerText = activeMonthsLeft.toFixed(1);
         document.getElementById('l_kill_shot').innerText = killShot.toFixed(2) + " TND";
         forceSaveState(); 
     }
@@ -1217,6 +1136,51 @@
         applyTheme(); populateCategories(); populateProjectDropdowns(); calculateBehavioralStreaks(); checkVapeField('adv'); checkVapeField('tm');
         processInterestBleed(); 
         
+        // V36 Dynamic Countdowns injection
+        let cdMain = document.getElementById('cdMain');
+        let cdSub = document.getElementById('cdSub');
+        let cdTitle = document.getElementById('cdTitle');
+        let timeNow = Date.now();
+        cdSub.style.display = 'none';
+
+        if (s.mode === 'vacation') {
+            cdTitle.innerText = "Next Embarkation";
+            if (s.settings.contractStart) {
+                let cStart = new Date(s.settings.contractStart).getTime();
+                let daysToEmbark = Math.ceil((cStart - timeNow) / 86400000);
+                cdMain.innerText = daysToEmbark > 0 ? `${daysToEmbark} Days Remaining` : "Embarkation Imminent!";
+                cdMain.style.color = daysToEmbark > 0 ? "var(--warning)" : "var(--danger)";
+            } else {
+                cdMain.innerText = "Contract Start Not Set";
+            }
+        } else {
+            cdTitle.innerText = "Contract & Paycheck Tracker";
+            if (s.settings.contractEnd) {
+                let cEnd = new Date(s.settings.contractEnd).getTime();
+                let daysToEnd = Math.ceil((cEnd - timeNow) / 86400000);
+                cdMain.innerText = daysToEnd > 0 ? `${daysToEnd} Days until Disembarkation` : "Contract Complete!";
+                cdMain.style.color = daysToEnd > 0 ? "var(--success)" : "var(--accent)";
+            } else {
+                cdMain.innerText = "Contract End Not Set";
+            }
+            
+            // Bi-weekly Carnival Paycheck Tracker starting Aug 21, 2026
+            let firstPay = new Date("2026-08-21T00:00:00").getTime();
+            if (timeNow < firstPay) {
+                let daysToPay = Math.ceil((firstPay - timeNow) / 86400000);
+                cdSub.innerText = `Next Carnival Pay in ${daysToPay} Days`;
+                cdSub.style.display = 'block';
+            } else {
+                let msSinceFirstPay = timeNow - firstPay;
+                let daysSince = msSinceFirstPay / 86400000;
+                let cyclesPassed = Math.floor(daysSince / 14);
+                let nextPay = firstPay + ((cyclesPassed + 1) * 14 * 86400000);
+                let daysToPay = Math.ceil((nextPay - timeNow) / 86400000);
+                cdSub.innerText = `Next Carnival Pay in ${daysToPay} Days`;
+                cdSub.style.display = 'block';
+            }
+        }
+
         let ibkrMktValue = s.vault.ibkr_shares * s.vault.ibkr_price;
         let ibkrUnrealized = ibkrMktValue - s.vault.ibkr_cost; let ibkrTotal = s.vault.ibkr_cash + ibkrMktValue;
         document.getElementById('v_ibkr_total').innerText = '$' + ibkrTotal.toFixed(2);
@@ -1253,8 +1217,9 @@
         let totUSD = ibkrTotal + s.vault.brightwell + s.vault.wise + s.vault.cash_usd; let totTND = (totUSD * s.fx_rate) + s.vault.cash_tnd + s.vault.savings;
         document.getElementById('totUSD').innerText = '$' + totUSD.toFixed(2); document.getElementById('totTND').innerText = totTND.toFixed(2) + ' TND';
 
-        // V35 Predictive Vape Engine (Locks projection from runway)
+        // V36 Dual-Mode Predictive Vape Engine Lock
         let vapeLockedTND = 0;
+        let vapeLockedUSD = 0;
         
         let vLogs = [];
         s.history[s.mode].archive.forEach(a => { a.logs.forEach(l => { if (l.category === '💨 Vape') vLogs.push({...l, ts: l.ts}); }); });
@@ -1268,18 +1233,19 @@
             if (totalLifespanDays > 0) avgLifespan = totalLifespanDays / empties.length;
         }
 
-        if (s.mode === 'vacation' && s.settings.vacationEnd) {
-            let vEnd = new Date(s.settings.vacationEnd).getTime();
-            let now = Date.now();
-            let daysLeftOnLand = (vEnd - now) / 86400000;
-            if (daysLeftOnLand > 0 && avgLifespan > 0) {
+        let targetEndDate = s.mode === 'vacation' ? s.settings.vacationEnd : s.settings.contractEnd;
+        if (targetEndDate) {
+            let targetTime = new Date(targetEndDate).getTime();
+            let daysLeftInStint = (targetTime - timeNow) / 86400000;
+            if (daysLeftInStint > 0 && avgLifespan > 0) {
                 let totalVapeSpend = vLogs.reduce((sum, l) => sum + l.amount, 0);
                 let totalBought = vLogs.reduce((sum, l) => sum + (l.vapeQty || 1), 0);
                 if (totalBought > 0) {
                     let avgCost = totalVapeSpend / totalBought;
-                    let vapesNeeded = daysLeftOnLand / avgLifespan;
+                    let vapesNeeded = daysLeftInStint / avgLifespan;
                     let netVapesToBuy = Math.max(0, vapesNeeded - stash);
-                    vapeLockedTND = netVapesToBuy * avgCost;
+                    if (s.mode === 'vacation') vapeLockedTND = netVapesToBuy * avgCost;
+                    else vapeLockedUSD = netVapesToBuy * avgCost;
                 }
             }
         }
@@ -1304,10 +1270,9 @@
             }
         });
 
-        // Add the vape projected lock to the TND envelopes deduction
-        if (!isUSDMode && vapeLockedTND > 0) {
-            activeEnvLocked += vapeLockedTND;
-        }
+        // Add the vape projected lock directly into the Envelopes deduction pool
+        if (!isUSDMode && vapeLockedTND > 0) activeEnvLocked += vapeLockedTND;
+        if (isUSDMode && vapeLockedUSD > 0) activeEnvLocked += vapeLockedUSD;
 
         let daily = s.history[s.mode].limit; 
         document.getElementById('uiRunway').innerText = daily > 0 ? Math.floor(totalLiquid / daily) + " Days" : "N/A";
@@ -1365,9 +1330,6 @@
         renderIOUs(); renderSchedule();
     }
 
-    // ==========================================
-    // 3. INTERNAL TRANSFERS & PROJECT ENGINE
-    // ==========================================
     function openTransferModal() { document.getElementById('trfAmount').value = ''; document.getElementById('transferModal').style.display = 'flex'; }
     async function processTransfer() {
         let amt = parseFloat(document.getElementById('trfAmount').value); let fromW = document.getElementById('trfFrom').value; let toW = document.getElementById('trfTo').value;
@@ -1460,7 +1422,6 @@
             if(!e.archived) envBox.innerHTML += html; else archBox.innerHTML += html;
         });
 
-        // V35 Dual Currency Missions Restored
         Object.keys(s.projects.missions).forEach(k => {
             let m = s.projects.missions[k]; let actionIcon = m.spent > 0 ? '📦' : '❌'; let bypassTag = m.bypass ? '<span style="color:var(--warning);font-size:8px;display:block;">(Bypass Active)</span>' : ''; 
             let currTag = m.currency;
@@ -1483,9 +1444,6 @@
 
     async function fundGoal(id) { let amtStr = await openUPrompt("Fund Goal", "Amount to hold for this goal:"); let amt = parseFloat(amtStr); if(isNaN(amt) || amt <= 0) return; let goal = s.projects.goals.find(g => g.id == id); if(goal) { goal.saved += amt; saveState(); await openUConfirm("Success", `Assigned ${amt} to ${goal.name}. (Virtual hold).`); } }
 
-    // ==========================================
-    // 4. EXPENSE LOGGING & TIME MACHINE UX
-    // ==========================================
     function toggleOnlineFields(prefix) { let val = document.getElementById(prefix + 'Project').value; let show = false; if(val.startsWith('mis_')) { let key = val.replace('mis_', ''); if(s.projects.missions[key] && s.projects.missions[key].hasLogistics) show = true; } document.getElementById(prefix + 'OnlineBox').style.display = show ? 'flex' : 'none'; }
     function toggleFXOverride(prefix) {
         try {
@@ -1799,9 +1757,6 @@
         curHist.current = []; curHist.balance = curHist.limit; saveState(); 
     }
 
-    // ==========================================
-    // 6. IOU & DEBT ENGINE
-    // ==========================================
     function renderIOUs() {
         const pList = document.getElementById('payablesList'); pList.innerHTML = '';
         s.ious.payables.forEach(p => { pList.innerHTML += `<div class="iou-item"><div><div style="font-weight:bold;">${p.name}</div><div style="color:var(--warning); font-size:11px;">Owe: ${p.amount.toFixed(2)} ${p.currency}</div></div><div><button class="iou-btn" onclick="processIOU('payable', ${p.id})">Pay</button> <button class="iou-del" style="background:none;border:none;color:var(--danger);" onclick="deleteIOU('payable', ${p.id})">❌</button></div></div>`; });
@@ -1880,9 +1835,6 @@
         saveState();
     }
 
-    // ==========================================
-    // 7. WIZARDS, AUTOMATIONS & UTILITIES
-    // ==========================================
     function openPaycheckModal() { 
         document.getElementById('pwGross').value = ''; 
         document.getElementById('pwLoanAmt').value = ''; 
@@ -1894,7 +1846,6 @@
         document.getElementById('paycheckModal').style.display = 'flex'; 
     }
     
-    // V35 Dual-Input Paycheck Calculator
     function calcPaycheck(mode, target) { 
         let gross = parseFloat(document.getElementById('pwGross').value) || 0; 
         if(gross <= 0) return;
@@ -1917,7 +1868,6 @@
         }
     }
 
-    // V35 "Current + Oldest" Paycheck Waterfall
     async function processPaycheck() {
         let gross = parseFloat(document.getElementById('pwGross').value); if(isNaN(gross) || gross <= 0) return;
         
@@ -2018,9 +1968,6 @@
         document.getElementById('stbPayAmt').value = '';
     }
 
-    // ==========================================
-    // 8. ANALYTICS & PREDICTOR
-    // ==========================================
     function renderChart(days) { 
         let vol = 0; let cats = {}; let cutoff = Date.now() - (days * 86400000); 
         ['vacation', 'onboard'].forEach(m => { 
@@ -2044,6 +1991,7 @@
         bd.innerHTML = html;
     }
 
+    // V36 Dual-Mode Vape Predictor Updates
     function renderVapeStats() {
         const bd = document.getElementById('vapeStatsHtml'); if (!bd) return;
         let vLogs = [];
@@ -2056,6 +2004,7 @@
         let sym = s.mode === 'vacation' ? 'TND' : 'USD';
 
         let stash = s.vape_stash.count; let empties = s.vape_stash.empty_logs; let avgLifespan = 0;
+        let timeNow = Date.now();
         
         if (vLogs.length > 0 && empties.length > 0) {
             let firstPurchaseTs = vLogs[0].ts;
@@ -2069,27 +2018,27 @@
         let runOut = "Need more data";
         if (avgLifespan > 0 && stash > 0) { 
             let daysLeft = stash * avgLifespan; 
-            let runDate = new Date(Date.now() + (daysLeft * 86400000)); 
+            let runDate = new Date(timeNow + (daysLeft * 86400000)); 
             runOut = runDate.toDateString(); 
         } else if (stash === 0 && empties.length > 0) { runOut = "Stash Empty"; }
 
-        // Fetch the locked vape cost specifically for display in the Command Center
-        let vapeLockedTND = 0;
-        if (s.mode === 'vacation' && s.settings.vacationEnd) {
-            let vEnd = new Date(s.settings.vacationEnd).getTime();
-            let now = Date.now();
-            let daysLeftOnLand = (vEnd - now) / 86400000;
-            if (daysLeftOnLand > 0 && avgLifespan > 0 && totalBought > 0) {
+        let targetEndDate = s.mode === 'vacation' ? s.settings.vacationEnd : s.settings.contractEnd;
+        let vapeLockedCost = 0;
+        
+        if (targetEndDate) {
+            let targetTime = new Date(targetEndDate).getTime();
+            let daysLeftInStint = (targetTime - timeNow) / 86400000;
+            if (daysLeftInStint > 0 && avgLifespan > 0 && totalBought > 0) {
                 let avgCost = totalSpent / totalBought;
-                let vapesNeeded = daysLeftOnLand / avgLifespan;
+                let vapesNeeded = daysLeftInStint / avgLifespan;
                 let netVapesToBuy = Math.max(0, vapesNeeded - stash);
-                vapeLockedTND = netVapesToBuy * avgCost;
+                vapeLockedCost = netVapesToBuy * avgCost;
             }
         }
 
         let vapeLockDisplay = '';
-        if(s.mode === 'vacation' && vapeLockedTND > 0) {
-            vapeLockDisplay = `<div style="font-size:11px; margin-top:5px;">Est. Vacation Cost: <strong style="color:var(--danger);">${vapeLockedTND.toFixed(2)} TND (Locked)</strong></div>`;
+        if(vapeLockedCost > 0) {
+            vapeLockDisplay = `<div style="font-size:11px; margin-top:5px;">Est. ${s.mode === 'vacation' ? 'Vacation' : 'Onboard'} Req. Cost: <strong style="color:var(--danger);">${vapeLockedCost.toFixed(2)} ${sym} (Locked)</strong></div>`;
         }
 
         let html = `
@@ -2114,9 +2063,6 @@
         s.vape_stash.count--; s.vape_stash.empty_logs.push(Date.now()); saveState();
     }
 
-    // ==========================================
-    // 9. API & MASTER UTILS
-    // ==========================================
     async function fetchStockPrice() {
         if (!navigator.onLine) { await openUConfirm("Offline", "You are currently offline. Manual entry only."); return; }
         try { const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/CSPX.L')); const data = await res.json(); const price = JSON.parse(data.contents).chart.result[0].meta.regularMarketPrice; document.getElementById('ibkrPrice').value = price.toFixed(2); saveIBKR(); await openUConfirm("Success", "Market price updated: $" + price.toFixed(2)); } catch (e) { await openUConfirm("Error", "Network Error: Could not fetch stock price."); }
@@ -2210,4 +2156,3 @@
 </script>
 </body>
 </html>
-  
