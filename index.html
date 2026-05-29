@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0f172a">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon.png">
-    <title>Crew Wallet Master V35</title>
+    <title>Crew Wallet Master V37</title>
     <style>
         :root { --bg-color: #0f172a; --card-bg: #1e293b; --accent: #fbbf24; --text: #f8fafc; --text-muted: #94a3b8; --success: #4ade80; --warning: #facc15; --danger: #f87171; --panel-border: #334155; --vault-bg: rgba(15, 23, 42, 0.5); }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; -webkit-tap-highlight-color: transparent; padding-bottom: 90px; }
@@ -22,7 +22,6 @@
         .nav-icon { font-size: 22px; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .nav-btn.active .nav-icon { transform: translateY(-3px); }
         .vault-card { background-color: var(--card-bg); border-radius: 16px; padding: 16px; border: 1px solid var(--panel-border); transition: transform 0.1s ease-out;}
-        .vault-card.clickable:active { transform: scale(0.97); border-color: var(--accent); }
         .vault-header { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 12px; text-align: center; display: flex; justify-content: space-between; align-items: center;}
         .vault-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
         .vault-item { background-color: var(--vault-bg); padding: 10px 4px; border-radius: 10px; text-align: center; border: 1px solid var(--panel-border); position: relative; cursor: pointer; transition: transform 0.1s;}
@@ -90,15 +89,6 @@
         .b-stat span { color: var(--accent); font-weight: bold; float: right;}
         .pnl-positive { color: var(--success) !important; }
         .pnl-negative { color: var(--danger) !important; }
-        
-        /* App Lock Engine */
-        #appLockScreen { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
-        .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 30px; width: 100%; max-width: 250px; }
-        .pin-btn { background: var(--card-bg); color: white; border: 1px solid var(--panel-border); border-radius: 50%; width: 60px; height: 60px; font-size: 24px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; margin: 0 auto; transition: transform 0.1s, background 0.1s; }
-        .pin-btn:active { transform: scale(0.9); background: var(--accent); color: #000; }
-        .pin-dots { display: flex; gap: 10px; margin-top: 20px; }
-        .pin-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--panel-border); background: transparent; transition: background 0.2s; }
-        .pin-dot.filled { background: var(--accent); border-color: var(--accent); }
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideInLeft { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
@@ -113,8 +103,6 @@
     </style>
 </head>
 <body>
-
-
 
 <div class="app-container" id="appWrapper">
     <div id="tab-dash" class="page-section active">
@@ -136,6 +124,8 @@
                     <div style="font-size:10px; color:var(--text-muted); text-align:left;">Total USD Assets:<br><strong id="totUSD" style="color:var(--text); font-size:13px;">$0.00</strong></div>
                     <div style="font-size:10px; color:var(--text-muted); text-align:right;">Total Wealth:<br><strong id="totTND" style="color:var(--success); font-size:13px;">0.00 TND</strong></div>
                 </div>
+                
+                <div id="dynCountdownBox" style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--panel-border); padding-top:8px; font-size:11px;"></div>
             </div>
 
             <div class="vault-grid">
@@ -260,7 +250,7 @@
         </div>
 
         <div class="vault-card" style="border-color: rgba(220, 38, 38, 0.4);">
-            <div class="vault-header" style="color: var(--danger);"><span>💳 Amortization Schedule</span><button onclick="addInstallment()" style="background:none;border:none;color:var(--text);font-size:16px;">➕</button></div>
+            <div class="vault-header" style="color: var(--danger);"><span>💳 Amortization Schedule</span></div>
             <div id="loanScheduleList" style="margin-top: 10px;"></div>
         </div>
         <div class="vault-card" style="border-color: rgba(250, 204, 21, 0.4);">
@@ -399,12 +389,6 @@
         <div class="vault-card">
             <div class="title">Custom Categories</div>
             <button class="btn-secondary" onclick="manageCategories()">🛠️ Manage Custom Categories</button>
-        </div>
-
-        <div class="vault-card">
-            <div class="title" style="color:var(--accent);">Security</div>
-            <div class="input-row" style="margin-bottom:10px;"><span style="font-size:12px; width:100%;">App Lock PIN:</span><input type="password" id="setPin" maxlength="4" onchange="updatePin()" placeholder="0000"></div>
-            <button class="btn-secondary" style="border-color:var(--accent); color:var(--accent);" onclick="registerFaceID()">🛡️ Enable FaceID / TouchID</button>
         </div>
 
         <div class="vault-card">
@@ -724,17 +708,16 @@
 </div>
 
 <div id="printArea"></div>
-<script>
+
+ <script>
     // ==========================================
     // 0. SERVICE WORKER & NETWORK TRACKER
     // ==========================================
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js').then((registration) => {
-                console.log('ServiceWorker registered with scope:', registration.scope);
-            }, (err) => {
-                console.log('ServiceWorker registration failed:', err);
-            });
+                console.log('SW registered:', registration.scope);
+            }).catch(err => console.log('SW failed:', err));
         });
     }
 
@@ -743,13 +726,8 @@
     if (!navigator.onLine) document.getElementById('offlineBadge').style.display = 'inline';
 
     // ==========================================
-    // 1. DATA, INDEXED-DB & CRYPTO ENGINE
+    // 1. DATA, INDEXED-DB & ENGINE CORE
     // ==========================================
-    async function hashPin(pin) {
-        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
-        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-
     const USER_PRISTINE_DATA = {
         "vault":{"ibkr":0,"brightwell":0,"wise":0,"cash_usd":0,"cash_tnd":0,"savings":0,"ibkr_fees":0,"lifetime_fees":0, "ibkr_cash":0, "ibkr_shares":0, "ibkr_cost":0, "ibkr_price":0},
         "loan":{
@@ -762,20 +740,19 @@
             ]
         },
         "ious":{"payables":[],"receivables":[]},
-        "history":{"vacation":{"archive":[],"current":[],"limit":35,"balance":35},"onboard":{"archive":[],"current":[],"limit":7.25,"balance":7.25}},
+        "history":{"vacation":{"archive":[],"current":[],"limit":49,"balance":49},"onboard":{"archive":[],"current":[],"limit":7.25,"balance":7.25}},
         "capital_saved_tnd":0, "capital_saved_usd":0, "fx_rate":2.923,"mode":"vacation","income_logs":[],
         "projects":{
             "envelopes":{},
-            "missions":{
-                "p_infra": { "name": "🎯 Port Infrastructure Tender Report", "spent": 0, "dead": 0, "hasLogistics": true, "archived": false, "bypass": false, "currency": "TND" }
-            },
+            "missions":{},
             "goals":[
                 { "id": 1, "name": "🏆 Used Toyota RAV4 Fund", "target": 50000, "saved": 0, "archived": false, "currency": "TND" }
             ]
         },
         "settings":{"contractStart":"2026-08-03","contractEnd":"2027-02-01", "vacationStart":"2026-05-15", "vacationEnd":"2026-08-02", "pin": ""},
         "vape_stash":{"count":0, "empty_logs":[]},
-        "custom_categories":["⛽ Car Fuel", "📱 Telecommunications", "🚢 Visa & Seaman Docs"]
+        "custom_categories":["⛽ Car Fuel", "📱 Telecommunications", "🚢 Visa & Seaman Docs"],
+        "ledger": []
     };
 
     let s = null;
@@ -809,15 +786,15 @@
     }
 
     function fallbackLoad() {
-        try { s = JSON.parse(localStorage.getItem('CrewWalletMaster')); } catch(e) {}
-        migrateData();
+        try { let local = localStorage.getItem('CrewWalletMaster'); if(local) { s = JSON.parse(local); migrateData(); return; } } catch(e) {}
+        s = USER_PRISTINE_DATA; migrateData();
     }
 
     async function migrateData() {
         if (!s || !s.vault || !s.history) s = USER_PRISTINE_DATA;
         if (!s.projects) s.projects = USER_PRISTINE_DATA.projects;
         if (!s.projects.envelopes) s.projects.envelopes = {};
-        if (!s.projects.missions) s.projects.missions = USER_PRISTINE_DATA.projects.missions;
+        if (!s.projects.missions) s.projects.missions = {};
         if (!s.projects.goals) s.projects.goals = USER_PRISTINE_DATA.projects.goals;
         if (!s.income_logs) s.income_logs = [];
         if (!s.fx_rate || isNaN(s.fx_rate)) s.fx_rate = 2.923;
@@ -825,6 +802,7 @@
         if (!s.vape_stash) s.vape_stash = {"count":0, "empty_logs":[]};
         if (!s.vape_stash.empty_logs) s.vape_stash.empty_logs = []; 
         if (!s.custom_categories || s.custom_categories.length === 0) s.custom_categories = USER_PRISTINE_DATA.custom_categories;
+        if (!s.ledger) s.ledger = [];
         
         if (s.settings.vacationStart === undefined) s.settings.vacationStart = "2026-05-15";
         if (s.settings.vacationEnd === undefined) s.settings.vacationEnd = "2026-08-02";
@@ -862,7 +840,7 @@
 
         processInterestBleed();
         processVacationArrears();
-        unlockApp(); // Forces security bypass natively
+        renderApp();
     }
 
     function processInterestBleed() {
@@ -896,16 +874,20 @@
 
     async function forceSaveState() {
         let dataStr = JSON.stringify(s); localStorage.setItem('CrewWalletMaster', dataStr); 
-        try {
-            let db = await initDB(); let tx = db.transaction(STORE_NAME, 'readwrite'); let store = tx.objectStore(STORE_NAME); store.put(dataStr, 'master_data');
-        } catch (e) { console.error("IndexedDB save failed"); }
+        try { let db = await initDB(); let tx = db.transaction(STORE_NAME, 'readwrite'); let store = tx.objectStore(STORE_NAME); store.put(dataStr, 'master_data'); } 
+        catch (e) { console.error("IndexedDB save failed"); }
     }
 
     async function saveState() { await forceSaveState(); renderApp(); }
 
+    function logTransaction(type, amount, currency, wallet, details) {
+        if(!s.ledger) s.ledger = [];
+        s.ledger.push({ id: Date.now(), type, amount, currency, wallet, details, mode: s.mode, timestamp: Date.now() });
+        forceSaveState();
+    }
+
     // --- Async Modals ---
     let resolvePrompt = null; let resolveConfirm = null;
-
     function openUPrompt(title, msg, defaultVal = '') {
         return new Promise(resolve => {
             document.getElementById('uPromptTitle').innerText = title; document.getElementById('uPromptMsg').innerText = msg;
@@ -918,23 +900,7 @@
     function closeUConfirm(isOk) { document.getElementById('uConfirmModal').style.display = 'none'; if(resolveConfirm) resolveConfirm(isOk); }
 
     // ==========================================
-    // 2. SECURITY & APP LOCK (BYPASSED)
-    // ==========================================
-    function unlockApp() {
-        let l = document.getElementById('appLockScreen'); if (l) l.style.display = 'none';
-        let w = document.getElementById('appWrapper'); if (w) w.style.display = 'flex';
-        renderApp();
-    }
-    
-    // Ghost functions to prevent button click errors if UI remains
-    function checkLock() { unlockApp(); }
-    function registerFaceID() { openUConfirm("Security Disabled", "App Lock features are permanently disabled for offline stability."); }
-    function triggerBiometrics() { unlockApp(); }
-    function enterPin(num) { unlockApp(); }
-    function clearPin() { unlockApp(); }
-
-    // ==========================================
-    // 3. UI NAVIGATION & CATEGORIES
+    // 2. UI NAVIGATION & CATEGORIES
     // ==========================================
     function switchTab(tabId) {
         document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
@@ -973,7 +939,7 @@
         s.custom_categories.forEach((c, i) => menuStr += `${i+1}: ${c}\n`);
         let ans = await openUPrompt("Manage Categories", menuStr); let idx = parseInt(ans) - 1;
         if (!isNaN(idx) && idx >= 0 && idx < s.custom_categories.length) {
-            let ok = await openUConfirm("Delete", `Delete '${s.custom_categories[idx]}'? Past logs will retain the text, but it won't appear in dropdowns.`);
+            let ok = await openUConfirm("Delete", `Delete '${s.custom_categories[idx]}'? Past logs will retain the text.`);
             if (ok) { s.custom_categories.splice(idx, 1); saveState(); populateCategories(); }
         }
     }
@@ -1014,8 +980,7 @@
         document.getElementById('b_avgSafe').innerText = safeDays > 0 ? (totalSafe / safeDays).toFixed(2) : "0.00";
         document.getElementById('b_avgOver').innerText = overDays > 0 ? (totalOver / overDays).toFixed(2) : "0.00";
 
-        let modeArch = s.history[s.mode].archive;
-        let totalModeSpend = 0; let validModeDays = 0;
+        let modeArch = s.history[s.mode].archive; let totalModeSpend = 0; let validModeDays = 0;
         modeArch.forEach(day => { let spent = day.logs.reduce((sum, item) => sum + ((item.category === "🏦 Financial & Fees") ? 0 : (item.bypassLimit ? (item.spillover||0) : item.amount)), 0); totalModeSpend += spent; validModeDays++; });
         let spentToday = s.history[s.mode].current.reduce((sum, item) => sum + ((item.category === "🏦 Financial & Fees") ? 0 : (item.bypassLimit ? (item.spillover||0) : item.amount)), 0);
         if (s.history[s.mode].current.length > 0) { totalModeSpend += spentToday; validModeDays++; }
@@ -1026,75 +991,51 @@
         if (avgEl) { avgEl.innerText = avgSpend.toFixed(2) + sym; document.getElementById('uiAvgSpendMode').innerText = s.mode === 'vacation' ? 'Vacation' : 'Onboard'; }
     }
 
-    function checkVapeField(prefix) {
-        let cat = document.getElementById(prefix + 'Category').value;
-        let box = document.getElementById(prefix + 'VapeQtyBox');
-        if (cat === '💨 Vape') box.style.display = 'block'; else box.style.display = 'none';
-    }
+    function checkVapeField(prefix) { let cat = document.getElementById(prefix + 'Category').value; document.getElementById(prefix + 'VapeQtyBox').style.display = (cat === '💨 Vape') ? 'block' : 'none'; }
 
     async function editLoanComponent(comp) {
         let currentVal = (comp === 'arrears') ? s.loan.arrears : s.loan.overdraft;
         let newValStr = await openUPrompt(`Edit ${comp}`, `Current: ${currentVal.toFixed(2)} TND\nEnter new exact amount:`, currentVal.toFixed(2));
-        if(newValStr === null) return;
-        let newVal = parseFloat(newValStr);
-        if (!isNaN(newVal) && newVal >= 0) {
-            if (comp === 'arrears') s.loan.arrears = newVal; else s.loan.overdraft = newVal; saveState();
-        }
+        if(newValStr === null) return; let newVal = parseFloat(newValStr);
+        if (!isNaN(newVal) && newVal >= 0) { if (comp === 'arrears') s.loan.arrears = newVal; else s.loan.overdraft = newVal; saveState(); }
     }
 
     async function editInstallmentAmount(id) {
         let p = s.loan.schedule.find(x => x.id === id); if(!p) return;
         let val = await openUPrompt("Edit Installment", `Current Amount: ${p.amount.toFixed(2)} TND\nEnter new amount for ${p.date}:`, p.amount.toFixed(2));
-        if(val === null) return;
-        let n = parseFloat(val);
-        if(!isNaN(n) && n > 0) { p.amount = n; saveState(); }
+        if(val === null) return; let n = parseFloat(val); if(!isNaN(n) && n > 0) { p.amount = n; saveState(); }
     }
 
     function calculateKillShot() {
         let targetDateStr = document.getElementById('l_target_date').value;
-        if(!targetDateStr) {
-            document.getElementById('l_months_left').innerText = "0";
-            document.getElementById('l_kill_shot').innerText = "0.00 TND";
-            s.loan.targetDate = "";
-            return;
-        }
+        if(!targetDateStr) { document.getElementById('l_months_left').innerText = "0"; document.getElementById('l_kill_shot').innerText = "0.00 TND"; s.loan.targetDate = ""; return; }
         s.loan.targetDate = targetDateStr;
 
-        let targetDate = new Date(targetDateStr + "-01");
-        let now = new Date();
+        let targetDate = new Date(targetDateStr + "-01"); let now = new Date();
         let totalMonthsLeft = (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
 
-        if (totalMonthsLeft <= 0) {
-            document.getElementById('l_months_left').innerText = "0";
-            document.getElementById('l_kill_shot').innerText = "Past Due";
-            saveState();
-            return;
-        }
+        if (totalMonthsLeft <= 0) { document.getElementById('l_months_left').innerText = "0"; document.getElementById('l_kill_shot').innerText = "Past Due"; saveState(); return; }
 
         let vStart = s.settings.vacationStart ? new Date(s.settings.vacationStart).getTime() : 0;
         let vEnd = s.settings.vacationEnd ? new Date(s.settings.vacationEnd).getTime() : 0;
-        
         let vacationMonths = 0;
+        
         if(vStart && vEnd && vEnd > now.getTime()) {
             let effectiveStart = Math.max(vStart, now.getTime());
             let effectiveEnd = Math.min(vEnd, targetDate.getTime());
-            if(effectiveEnd > effectiveStart) {
-                vacationMonths = (effectiveEnd - effectiveStart) / (1000 * 60 * 60 * 24 * 30.44);
-            }
+            if(effectiveEnd > effectiveStart) vacationMonths = (effectiveEnd - effectiveStart) / (1000 * 60 * 60 * 24 * 30.44);
         }
         
         let activeMonths = Math.max(0, totalMonthsLeft - vacationMonths);
         let unpaidsTND = s.loan.schedule.filter(x => !x.paid).reduce((sum, item) => sum + item.amount, 0);
         let totalTrueDebt = s.loan.arrears + s.loan.overdraft + unpaidsTND;
-
         let killShot = activeMonths > 0 ? (totalTrueDebt / activeMonths) : totalTrueDebt;
 
         document.getElementById('l_months_left').innerText = `${totalMonthsLeft} (Active: ${activeMonths.toFixed(1)})`;
         document.getElementById('l_kill_shot').innerText = killShot.toFixed(2) + " TND";
         forceSaveState(); 
-    }
 
-    function renderApp() {
+            function renderApp() {
         applyTheme(); populateCategories(); populateProjectDropdowns(); calculateBehavioralStreaks(); checkVapeField('adv'); checkVapeField('tm');
         processInterestBleed(); 
         
@@ -1135,17 +1076,8 @@
         document.getElementById('totUSD').innerText = '$' + totUSD.toFixed(2); document.getElementById('totTND').innerText = totTND.toFixed(2) + ' TND';
 
         // --- Master Countdown Injection ---
-        let totUSDDiv = document.getElementById('totUSD');
-        if (totUSDDiv) {
-            let vaultContainer = totUSDDiv.parentElement.parentElement.parentElement;
-            let dynCountBox = document.getElementById('dynCountdownBox');
-            if (!dynCountBox) {
-                dynCountBox = document.createElement('div');
-                dynCountBox.id = 'dynCountdownBox';
-                dynCountBox.style.cssText = "display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--panel-border); padding-top:8px;";
-                vaultContainer.appendChild(dynCountBox);
-            }
-            
+        let dynCountBox = document.getElementById('dynCountdownBox');
+        if (dynCountBox) {
             let now = Date.now(); let countdownHtml = '';
             if (s.mode === 'vacation') {
                 let vEnd = s.settings.contractStart ? new Date(s.settings.contractStart).getTime() : 0;
@@ -1282,6 +1214,7 @@
         if(fromUSD && !toUSD) amountToAdd = amt * s.fx_rate; else if(!fromUSD && toUSD) amountToAdd = amt / s.fx_rate;
         if (s.vault[fromW] < amountToSubtract) { let ok = await openUConfirm("Warning", `This will push ${fromW} into a negative balance. Proceed?`); if(!ok) return; }
         s.vault[fromW] -= amountToSubtract; s.vault[toW] += amountToAdd;
+        logTransaction('Transfer', amountToSubtract, fromUSD?'USD':'TND', fromW, `To ${toW}`);
         document.getElementById('transferModal').style.display = 'none'; saveState();
     }
 
@@ -1711,6 +1644,7 @@
             if (s.vault[walletKey] < deductAmt) { let ok = await openUConfirm("Warning", `This pushes ${walletKey} into negative. Proceed?`); if(!ok) return; }
             s.vault[walletKey] -= deductAmt;
             s.history[s.mode].current.push({ amount: deductAmt, tag: `🏦 Manual Installment Pay`, category: "🏦 Financial & Fees", location: "Bank", walletSource: walletKey, bypassLimit: true, fxRate: s.fx_rate, ts: Date.now() });
+            logTransaction('STB Installment', deductAmt, (w==='1')?'USD':'TND', walletKey, 'Manual schedule payment');
         }
         p.paid = true; p.paidOn = Date.now(); saveState();
     }
@@ -1756,27 +1690,50 @@
 
         let savDest = document.getElementById('pwSavDest').value; 
         if(savDest === 'ibkr') s.vault.ibkr_cash += toSavUSD; else s.vault.savings += (toSavUSD * s.fx_rate);
-        s.vault.brightwell += toOpUSD; document.getElementById('paycheckModal').style.display = 'none'; saveState(); 
+        s.vault.brightwell += toOpUSD; 
+        
+        logTransaction('Paycheck Waterfall', gross, 'USD', 'brightwell', `Processed $${gross} paycheck splits`);
+        document.getElementById('paycheckModal').style.display = 'none'; saveState(); 
         await openUConfirm("Success", `Processed: -$${toLoanUSD.toFixed(2)} to Debt, +$${toSavUSD.toFixed(2)} to ${savDest.toUpperCase()}, +$${toOpUSD.toFixed(2)} to Brightwell`);
     }
 
     function openIBKRModal() { document.getElementById('ibkrIdle').value = s.vault.ibkr_cash.toFixed(2); document.getElementById('ibkrShares').value = s.vault.ibkr_shares.toFixed(4); document.getElementById('ibkrCost').value = s.vault.ibkr_cost.toFixed(2); document.getElementById('ibkrPrice').value = s.vault.ibkr_price.toFixed(2); document.getElementById('ibkrModal').style.display = 'flex'; }
     function saveIBKR() { s.vault.ibkr_cash = parseFloat(document.getElementById('ibkrIdle').value) || 0; s.vault.ibkr_shares = parseFloat(document.getElementById('ibkrShares').value) || 0; s.vault.ibkr_cost = parseFloat(document.getElementById('ibkrCost').value) || 0; s.vault.ibkr_price = parseFloat(document.getElementById('ibkrPrice').value) || 0; saveState(); }
     function openSweepModal() { document.getElementById('swAmount').value = ''; document.getElementById('sweepModal').style.display = 'flex'; }
-    async function processSweep() { let amt = parseFloat(document.getElementById('swAmount').value); if(isNaN(amt) || amt <= 0) return; let src = document.getElementById('swSource').value; s.vault[src] -= amt; s.vault.ibkr_cash += amt; document.getElementById('sweepModal').style.display = 'none'; saveState(); await openUConfirm("Success", `Swept $${amt.toFixed(2)} into IBKR Idle Cash.`); }
+    async function processSweep() { 
+        let amt = parseFloat(document.getElementById('swAmount').value); if(isNaN(amt) || amt <= 0) return; let src = document.getElementById('swSource').value; s.vault[src] -= amt; s.vault.ibkr_cash += amt; 
+        logTransaction('Sweep', amt, 'USD', src, 'Swept to IBKR Idle Cash');
+        document.getElementById('sweepModal').style.display = 'none'; saveState(); await openUConfirm("Success", `Swept $${amt.toFixed(2)} into IBKR Idle Cash.`); 
+    }
 
-    async function vaultWise() { let aStr = await openUPrompt("Wise Transfer", "Amount to Wise (USD):"); let amount = parseFloat(aStr); if(isNaN(amount) || amount <= 0) return; let mStr = await openUPrompt("Fee Method", "1: Wire ($1) | 2: Apple Pay ($1.25)"); let fee = mStr === '1' ? 1.00 : (mStr === '2' ? 1.25 : 0); if(fee === 0) return; s.vault.brightwell -= (amount + fee); s.vault.wise += amount; s.vault.lifetime_fees += fee; saveState(); }
-    async function vaultExchange() { let uStr = await openUPrompt("Exchange", "USD given:"); let usdGiven = parseFloat(uStr); if(isNaN(usdGiven) || usdGiven <= 0) return; let tStr = await openUPrompt("Exchange", "TND received:"); let tndRec = parseFloat(tStr); if(!isNaN(tndRec) && tndRec > 0) { s.vault.cash_usd -= usdGiven; s.vault.cash_tnd += tndRec; saveState(); } }
+    async function vaultWise() { 
+        let aStr = await openUPrompt("Wise Transfer", "Amount to Wise (USD):"); let amount = parseFloat(aStr); if(isNaN(amount) || amount <= 0) return; let mStr = await openUPrompt("Fee Method", "1: Wire ($1) | 2: Apple Pay ($1.25)"); let fee = mStr === '1' ? 1.00 : (mStr === '2' ? 1.25 : 0); if(fee === 0) return; s.vault.brightwell -= (amount + fee); s.vault.wise += amount; s.vault.lifetime_fees += fee; 
+        logTransaction('Wise Transfer', amount, 'USD', 'brightwell', `Sent to Wise (Fee: $${fee})`);
+        saveState(); 
+    }
+    async function vaultExchange() { 
+        let uStr = await openUPrompt("Exchange", "USD given:"); let usdGiven = parseFloat(uStr); if(isNaN(usdGiven) || usdGiven <= 0) return; let tStr = await openUPrompt("Exchange", "TND received:"); let tndRec = parseFloat(tStr); if(!isNaN(tndRec) && tndRec > 0) { s.vault.cash_usd -= usdGiven; s.vault.cash_tnd += tndRec; 
+            logTransaction('FX Exchange', usdGiven, 'USD', 'cash_usd', `Received ${tndRec} TND`);
+            saveState(); 
+        } 
+    }
 
     function openATMModal() { document.getElementById('atmAmt').value = ''; document.getElementById('atmAmt').placeholder = s.mode === 'vacation' ? "Withdrawal Amount (TND)" : "Withdrawal Amount (USD)"; document.getElementById('atmLoc').value = s.mode === 'vacation' ? 'tunisia' : 'intl'; toggleATMFee(); document.getElementById('atmFee').value = ''; document.getElementById('atmModal').style.display = 'flex'; }
     function toggleATMFee() { document.getElementById('atmFeeGroup').style.display = document.getElementById('atmLoc').value === 'intl' ? 'flex' : 'none'; }
-    function processATM() { let amt = parseFloat(document.getElementById('atmAmt').value); if(isNaN(amt) || amt <= 0) return; let src = document.getElementById('atmSource').value; let loc = document.getElementById('atmLoc').value; let feeUSD = 0; if (loc === 'tunisia') { feeUSD = (10 / s.fx_rate); } else if (loc === 'intl') { feeUSD = (parseFloat(document.getElementById('atmFee').value) || 0); } let isUSDMode = (s.mode === 'onboard'); let amtUSD = isUSDMode ? amt : (amt / s.fx_rate); let amtTND = isUSDMode ? (amt * s.fx_rate) : amt; if (src === 'savings') { s.vault.savings -= amtTND; } else { s.vault[src] -= (amtUSD + feeUSD); } if (isUSDMode) { s.vault.cash_usd += amt; } else { s.vault.cash_tnd += amt; } if (feeUSD > 0) { let logAmount = (loc === 'tunisia') ? 10 : (isUSDMode ? feeUSD : (feeUSD * s.fx_rate)); let locLabel = loc === 'tunisia' ? "Tunisia" : "International"; s.history[s.mode].current.push({ amount: logAmount, tag: "ATM Withdrawal Fee", category: "🏦 Financial & Fees", location: locLabel, walletSource: src, bypassLimit: true, fxRate: s.fx_rate, ts: Date.now() }); } document.getElementById('atmModal').style.display = 'none'; saveState(); }
+    function processATM() { 
+        let amt = parseFloat(document.getElementById('atmAmt').value); if(isNaN(amt) || amt <= 0) return; let src = document.getElementById('atmSource').value; let loc = document.getElementById('atmLoc').value; let feeUSD = 0; if (loc === 'tunisia') { feeUSD = (10 / s.fx_rate); } else if (loc === 'intl') { feeUSD = (parseFloat(document.getElementById('atmFee').value) || 0); } let isUSDMode = (s.mode === 'onboard'); let amtUSD = isUSDMode ? amt : (amt / s.fx_rate); let amtTND = isUSDMode ? (amt * s.fx_rate) : amt; if (src === 'savings') { s.vault.savings -= amtTND; } else { s.vault[src] -= (amtUSD + feeUSD); } if (isUSDMode) { s.vault.cash_usd += amt; } else { s.vault.cash_tnd += amt; } if (feeUSD > 0) { let logAmount = (loc === 'tunisia') ? 10 : (isUSDMode ? feeUSD : (feeUSD * s.fx_rate)); let locLabel = loc === 'tunisia' ? "Tunisia" : "International"; s.history[s.mode].current.push({ amount: logAmount, tag: "ATM Withdrawal Fee", category: "🏦 Financial & Fees", location: locLabel, walletSource: src, bypassLimit: true, fxRate: s.fx_rate, ts: Date.now() }); } 
+        logTransaction('ATM Withdrawal', amt, isUSDMode ? 'USD' : 'TND', src, `Location: ${loc}`);
+        document.getElementById('atmModal').style.display = 'none'; saveState(); 
+    }
 
     function openIncomeModal() { document.getElementById('incAmount').value = ''; document.getElementById('incDetails').value = ''; document.getElementById('incSource').value = 'gig'; document.getElementById('incWallet').value = 'cash_tnd'; updateIncPlaceholder(); document.getElementById('incomeModal').style.display = 'flex'; }
     function updateIncPlaceholder() { let src = document.getElementById('incSource').value; document.getElementById('incBorrowWarning').style.display = src === 'borrow' ? 'block' : 'none'; }
-    async function processIncome() { let amt = parseFloat(document.getElementById('incAmount').value); if(isNaN(amt) || amt <= 0) return; let source = document.getElementById('incSource').value; let wallet = document.getElementById('incWallet').value; let details = document.getElementById('incDetails').value.trim() || "No details"; 
+    async function processIncome() { 
+        let amt = parseFloat(document.getElementById('incAmount').value); if(isNaN(amt) || amt <= 0) return; let source = document.getElementById('incSource').value; let wallet = document.getElementById('incWallet').value; let details = document.getElementById('incDetails').value.trim() || "No details"; 
         if(wallet === 'ibkr_cash') s.vault.ibkr_cash += amt; else s.vault[wallet] += amt; 
-        let isUSD = ['brightwell', 'wise', 'cash_usd', 'ibkr_cash'].includes(wallet); let currency = isUSD ? 'USD' : 'TND'; if(source === 'borrow') { s.ious.payables.push({ id: Date.now(), name: details, amount: amt, currency: currency }); await openUConfirm("Success", "Added to vault AND created Payable IOU."); } s.income_logs.push({ id: Date.now(), amount: amt, currency: currency, wallet: wallet, source: source, details: details, ts: Date.now() }); document.getElementById('incomeModal').style.display = 'none'; saveState(); 
+        let isUSD = ['brightwell', 'wise', 'cash_usd', 'ibkr_cash'].includes(wallet); let currency = isUSD ? 'USD' : 'TND'; if(source === 'borrow') { s.ious.payables.push({ id: Date.now(), name: details, amount: amt, currency: currency }); await openUConfirm("Success", "Added to vault AND created Payable IOU."); } s.income_logs.push({ id: Date.now(), amount: amt, currency: currency, wallet: wallet, source: source, details: details, ts: Date.now() }); 
+        logTransaction('Income/Funding', amt, currency, wallet, `Source: ${source} - ${details}`);
+        document.getElementById('incomeModal').style.display = 'none'; saveState(); 
     }
     function renderIncomeLogs() { const listNode = document.getElementById('incomeList'); listNode.innerHTML = ''; if(s.income_logs.length === 0) { listNode.innerHTML = '<div style="font-size:11px;text-align:center;color:var(--text-muted);">No income.</div>'; return; } s.income_logs.slice().reverse().forEach((inc, idx) => { let actualIdx = s.income_logs.length - 1 - idx; let srcIcon = inc.source === 'gig' ? '🛠️' : (inc.source === 'sale' ? '🏷️' : (inc.source === 'borrow' ? '🤝' : '✏️')); listNode.innerHTML += `<div class="history-item"><div><div style="font-weight:600;">${srcIcon} ${inc.details}</div><div style="font-size:9px; color:var(--text-muted);">To: ${inc.wallet}</div></div><div style="display:flex; gap:10px; align-items:center;"><span style="color:var(--success); font-weight:bold;">+${inc.amount.toFixed(2)} ${inc.currency}</span><button class="edit-btn" onclick="deleteIncome(${actualIdx})">❌</button></div></div>`; }); }
     async function deleteIncome(idx) { let ok = await openUConfirm("Delete", "Delete this income log?"); if(ok) { s.income_logs.splice(idx, 1); saveState(); renderIncomeLogs(); } }
@@ -1791,6 +1748,7 @@
         if(w !== 'none') { let deductAmt = (w === 'brightwell') ? amt/s.fx_rate : amt; s.vault[w] -= deductAmt; s.history[s.mode].current.push({ amount: deductAmt, tag: `🏦 Manual STB Direct Payment`, category: "🏦 Financial & Fees", location: "Bank", walletSource: w, bypassLimit: true, fxRate: s.fx_rate, ts: Date.now() }); } 
         if (s.loan.overdraft > 0) { if (amt >= s.loan.overdraft) { amt -= s.loan.overdraft; s.loan.overdraft = 0; } else { s.loan.overdraft -= amt; amt = 0; } }
         if (amt > 0) { s.loan.arrears -= amt; if(s.loan.arrears < 0) s.loan.arrears = 0; }
+        logTransaction('STB Manual Pay', amt, 'TND', w, 'Direct payment outside waterfall');
         saveState(); document.getElementById('stbModal').style.display = 'none'; document.getElementById('stbPayAmt').value = '';
     }
 
@@ -1840,7 +1798,6 @@
             let daysLeft = stash * avgLifespan; let runDate = new Date(Date.now() + (daysLeft * 86400000)); runOut = runDate.toDateString(); 
         } else if (stash === 0 && empties.length > 0) { runOut = "Stash Empty"; }
 
-        // Fetch dual-mode locked vape cost
         let vapeLockedTND = 0; let nowTs = Date.now();
         let targetEndVape = (s.mode === 'vacation') ? 
             (s.settings.vacationEnd ? new Date(s.settings.vacationEnd).getTime() : 0) : 
@@ -1902,6 +1859,7 @@
     function updateContractDates() { 
         s.settings.contractStart = document.getElementById('setContractStart').value; s.settings.contractEnd = document.getElementById('setContractEnd').value; 
         s.settings.vacationStart = document.getElementById('setVacationStart').value; s.settings.vacationEnd = document.getElementById('setVacationEnd').value;
+        processVacationArrears();
         saveState(); 
     }
 
@@ -1910,7 +1868,6 @@
         document.getElementById('setOnbLimit').value = s.history.onboard.limit; document.getElementById('setFX').value = s.fx_rate; 
         document.getElementById('setContractStart').value = s.settings.contractStart || ''; document.getElementById('setContractEnd').value = s.settings.contractEnd || ''; 
         document.getElementById('setVacationStart').value = s.settings.vacationStart || ''; document.getElementById('setVacationEnd').value = s.settings.vacationEnd || ''; 
-        document.getElementById('setPin').value = ''; document.getElementById('setPin').placeholder = 'Disabled';
     }
 
     function changeMode() { s.mode = document.getElementById('setMode').value; saveState(); }
@@ -1967,6 +1924,5 @@
     loadState();
 </script>
 
-</body>
-</html>
-  
+    }
+   
