@@ -30,6 +30,16 @@
             --safe-top: env(safe-area-inset-top, 0px);
             --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
+        @media (prefers-color-scheme: light) {
+            :root { 
+                --bg-main: #f1f5f9;
+                --panel-bg: rgba(255, 255, 255, 0.65);
+                --input-bg: #ffffff;
+                --text-main: #0f172a;
+                --text-muted: #64748b;
+                --border-color: rgba(15, 23, 42, 0.15);
+            }
+        }
 
         /* ==========================================================================
            2. GLOBAL RESET & BASE HTML ELEMENTS
@@ -2148,25 +2158,17 @@
             document.getElementById('nav-' + tabId).classList.add('active');
             window.scrollTo(0, 0);
             
-            if(tabId === 'analytics') { renderVapeStats(); }
-            if(tabId === 'debt') { updateLoanUI(); }
+            if(tabId === 'dash') { renderDashboard(); }
+            if(tabId === 'debt') { updateLoanUI(); renderIOUs(); }
+            if(tabId === 'analytics') { renderVapeStats(); renderProjects(); renderChart(30); renderLeaderboard(); }
             if(tabId === 'time') { loadPastDay(); renderIncomeLogs(); }
             if(tabId === 'settings') { populateSettings(); }
-        }
-
-        function renderApp() {
-            if(!s) return;
-            autoArchiveDay();
-            renderDashboard();
-            renderVapeStats();
-            calculateStreaks();
         }
 
         function renderDashboard() {
             let isTND = s.mode === 'vacation';
             let fx = parseFloat(s.fx_rate) || 2.923;
 
-            // Update Master Vault Displays
             document.getElementById('v_cash_tnd').innerText = (parseFloat(s.vault.cash_tnd) || 0).toFixed(2);
             document.getElementById('v_cash_usd').innerText = (parseFloat(s.vault.cash_usd) || 0).toFixed(2);
             document.getElementById('v_savings').innerText = (parseFloat(s.vault.savings) || 0).toFixed(2);
@@ -2187,34 +2189,41 @@
                 pnlEl.className = 'v-sub pnl-negative';
             }
 
-            // Total Wealth Calc
-            let totUSD = (parseFloat(s.vault.cash_usd) || 0) + (parseFloat(s.vault.brightwell) || 0) + (parseFloat(s.vault.wise) || 0) + ibkrTot;
-            let totTND = (parseFloat(s.vault.cash_tnd) || 0) + (parseFloat(s.vault.savings) || 0) + (totUSD * fx);
+            // Fixed: Removed IBKR from USD Assets
+            let totUSD = (parseFloat(s.vault.cash_usd) || 0) + (parseFloat(s.vault.brightwell) || 0) + (parseFloat(s.vault.wise) || 0);
+            let totTND = (parseFloat(s.vault.cash_tnd) || 0) + (parseFloat(s.vault.savings) || 0) + (totUSD * fx) + (ibkrTot * fx);
             
             document.getElementById('totUSD').innerText = `$${totUSD.toFixed(2)}`;
             document.getElementById('totTND').innerText = `${totTND.toFixed(2)} TND`;
 
-            // Capital Saved Update
             let capSaved = isTND ? (parseFloat(s.capital_saved_tnd) || 0) : (parseFloat(s.capital_saved_usd) || 0);
-            document.getElementById('uiCapitalSavedLbl').innerText = `Total Capital Saved (${isTND ? 'TND' : 'USD'})`;
-            document.getElementById('uiCapitalSaved').innerText = capSaved.toFixed(2);
+            let capLbl = document.getElementById('uiCapitalSavedLbl');
+            let capVal = document.getElementById('uiCapitalSaved');
+            if(capLbl) capLbl.innerText = `Total Capital Saved (${isTND ? 'TND' : 'USD'})`;
+            if(capVal) capVal.innerText = capSaved.toFixed(2);
 
-            // Calculate Locked Buffers for Runway
+            // Fixed: Runway Math - Earmark Envelopes & Vapes correctly
             let lockedAmt = 0;
             (s.projects.goals || []).forEach(g => {
                 if(g.lockedFromRunway) {
-                    lockedAmt += (g.currency === (isTND ? 'TND' : 'USD')) ? (parseFloat(g.saved) || 0) : 
-                        ((isTND ? (parseFloat(g.saved) || 0) * fx : (parseFloat(g.saved) || 0) / fx));
+                    let val = parseFloat(g.saved) || 0;
+                    lockedAmt += (g.currency === (isTND ? 'TND' : 'USD')) ? val : (isTND ? val * fx : val / fx);
                 }
             });
+            let earmarkTracker = (tracker) => {
+                if(!tracker.archived && tracker.bypass) {
+                    let remain = Math.max(0, (parseFloat(tracker.target) || 0) - (parseFloat(tracker.spent) || 0));
+                    lockedAmt += (tracker.currency === (isTND ? 'TND' : 'USD')) ? remain : (isTND ? remain * fx : remain / fx);
+                }
+            };
+            Object.values(s.projects.envelopes || {}).forEach(earmarkTracker);
+            Object.values(s.projects.missions || {}).forEach(earmarkTracker);
 
-            // Calculate Future Vape Liability Earmark
             let vm = computeVapeMath();
             let vapeLiabilityMatched = isTND ? 
                 (vm.liabilityCur === 'TND' ? vm.liabilityAmt : vm.liabilityAmt * fx) : 
                 (vm.liabilityCur === 'USD' ? vm.liabilityAmt : vm.liabilityAmt / fx);
 
-            // Compute Liquid Core Capital
             let coreCapital = isTND ? 
                 ((parseFloat(s.vault.cash_tnd) || 0) + (parseFloat(s.vault.savings) || 0)) : 
                 ((parseFloat(s.vault.cash_usd) || 0) + (parseFloat(s.vault.brightwell) || 0) + (parseFloat(s.vault.wise) || 0));
@@ -2229,7 +2238,6 @@
             document.getElementById('uiRunwayBudget').innerText = `@ ${limit.toFixed(2)}/day`;
             document.getElementById('uiNetRunway').innerText = `Net Core (Excl. Earmarks): ${netDays.toFixed(1)} Days`;
 
-            // Timeline Math
             let timeline = getTimelineContext();
             document.getElementById('cdTitle').innerText = timeline.title;
             document.getElementById('cdMain').innerText = timeline.main;
@@ -2241,7 +2249,6 @@
                 cdSubEl.style.display = 'none';
             }
 
-            // Today's Pocket
             let balance = parseFloat(s.history[s.mode].balance) || 0;
             let displayBal = document.getElementById('balanceDisplay');
             displayBal.innerText = balance.toFixed(2);
@@ -2261,13 +2268,11 @@
                 pBar.style.backgroundColor = 'var(--danger)';
             }
 
-            // Check Spillover
             let spillover = false;
             let curLogs = s.history[s.mode].current || [];
             curLogs.forEach(log => { if(log.bypassLimit) spillover = true; });
             document.getElementById('spilloverAlert').style.display = spillover ? 'block' : 'none';
 
-            // Calculate Accumulated Surplus
             let accumSurplus = 0;
             (s.history[s.mode].archive || []).forEach(day => {
                 accumSurplus += parseFloat(day.surplus) || 0;
@@ -2280,6 +2285,7 @@
 
             renderTodayList();
         }
+
 
         // ==========================================
         // 8. BEHAVIORAL STREAK TRACKER
@@ -3184,7 +3190,60 @@
         }
         
         // Modal Handlers (Diagnostics & Projects)
-        function openDiagnosticsModal() { renderVapeStats(); document.getElementById('diagnosticsModal').style.display = 'flex'; }
+                function openDiagnosticsModal() {
+            renderVapeStats();
+            
+            let isTND = s.mode === 'vacation';
+            let fx = parseFloat(s.fx_rate) || 2.923;
+            let curStr = isTND ? 'TND' : 'USD';
+
+            let coreCapital = isTND ? 
+                ((parseFloat(s.vault.cash_tnd) || 0) + (parseFloat(s.vault.savings) || 0)) : 
+                ((parseFloat(s.vault.cash_usd) || 0) + (parseFloat(s.vault.brightwell) || 0) + (parseFloat(s.vault.wise) || 0));
+
+            let lockedAmt = 0;
+            (s.projects.goals || []).forEach(g => {
+                if(g.lockedFromRunway) {
+                    let val = parseFloat(g.saved) || 0;
+                    lockedAmt += (g.currency === (isTND ? 'TND' : 'USD')) ? val : (isTND ? val * fx : val / fx);
+                }
+            });
+            let earmarkTracker = (tracker) => {
+                if(!tracker.archived && tracker.bypass) {
+                    let remain = Math.max(0, (parseFloat(tracker.target) || 0) - (parseFloat(tracker.spent) || 0));
+                    lockedAmt += (tracker.currency === (isTND ? 'TND' : 'USD')) ? remain : (isTND ? remain * fx : remain / fx);
+                }
+            };
+            Object.values(s.projects.envelopes || {}).forEach(earmarkTracker);
+            Object.values(s.projects.missions || {}).forEach(earmarkTracker);
+
+            let vm = computeVapeMath();
+            let vapeLiabilityMatched = isTND ? 
+                (vm.liabilityCur === 'TND' ? vm.liabilityAmt : vm.liabilityAmt * fx) : 
+                (vm.liabilityCur === 'USD' ? vm.liabilityAmt : vm.liabilityAmt / fx);
+
+            lockedAmt += vapeLiabilityMatched;
+            
+            let netCore = coreCapital - lockedAmt;
+            let limit = parseFloat(s.history[s.mode].limit) || 0;
+            let netDays = limit > 0 ? (netCore / limit) : 0;
+
+            document.getElementById('diagGross').innerText = `${coreCapital.toFixed(2)} ${curStr}`;
+            document.getElementById('diagEarmarked').innerText = `-${lockedAmt.toFixed(2)} ${curStr}`;
+            document.getElementById('diagCore').innerText = `${netCore.toFixed(2)} ${curStr}`;
+            document.getElementById('diagAllowance').innerText = `${limit.toFixed(2)} ${curStr} / day`;
+            document.getElementById('diagRunway').innerText = `${netDays.toFixed(1)} Days`;
+
+            let verdict = "";
+            if (netDays < 0) verdict = "🚨 SEVERE DANGER: Earmarks exceed physical cash. You are in a deficit.";
+            else if (netDays < 10) verdict = "⚠️ CAUTION: Core runway is extremely short. Restrict spending immediately.";
+            else if (netDays > 30) verdict = "✅ HEALTHY: Core runway is well-padded against active limits.";
+            else verdict = "ℹ️ STABLE: Runway is pacing normally within phase constraints.";
+
+            document.getElementById('diagVerdict').innerText = verdict;
+            document.getElementById('diagnosticsModal').style.display = 'flex';
+        }
+
         function openRunwayLockModal() { document.getElementById('rlName').value = ''; document.getElementById('rlAmount').value = ''; document.getElementById('runwayLockModal').style.display = 'flex'; }
         function openBehaviorModal() { document.getElementById('behaviorModal').style.display = 'flex'; }
         function submitRunwayLock() {
@@ -3236,6 +3295,36 @@
             originalRenderApp();
         };
 
+         function renderIOUs() {
+            let drawList = (arr, type) => {
+                let h = '';
+                (arr || []).forEach((iou, i) => {
+                    let amt = parseFloat(iou.amt) || 0;
+                    h += `<div class="iou-item">`;
+                    h += `<div><strong style="color:var(--text-main); font-size:13px;">${iou.who}</strong><div style="font-size:10px; color:var(--text-muted);">${iou.desc || ''}</div></div>`;
+                    h += `<div style="text-align:right;"><span style="font-weight:900; font-size:14px; color:var(--${type==='payable'?'warning':'success'});">${amt.toFixed(2)} ${iou.currency}</span>`;
+                    h += `<div><button class="iou-btn" style="margin-top:6px;" onclick="openResolveIOU('${type}', ${i})">Resolve</button></div></div></div>`;
+                });
+                return h || `<div style="font-size:11px; color:var(--text-muted); text-align:center;">No active records.</div>`;
+            };
+            let pBox = document.getElementById('payablesList');
+            let rBox = document.getElementById('receivablesList');
+            if(pBox) pBox.innerHTML = drawList(s.ious.payables, 'payable');
+            if(rBox) rBox.innerHTML = drawList(s.ious.receivables, 'receivable');
+        }
+
+        async function editCapitalSaved() {
+            let isTND = s.mode === 'vacation';
+            let curVal = isTND ? s.capital_saved_tnd : s.capital_saved_usd;
+            let val = await openUPrompt("Edit Capital Saved", `Enter exact total in ${isTND ? 'TND' : 'USD'}:`, curVal);
+            let num = parseFloat(val);
+            if(!isNaN(num)) {
+                if(isTND) s.capital_saved_tnd = num;
+                else s.capital_saved_usd = num;
+                saveState();
+            }
+        }
+           
         window.onload = loadState;
 
         </script>
