@@ -2172,7 +2172,7 @@
         calculateRunwayDiagnostics();
         document.getElementById('diagnosticsModal').style.display = 'flex';
     }
-
+    
     function calculateRunwayDiagnostics() {
         let isTND = s.mode === 'vacation';
         let sym = isTND ? ' TND' : ' USD';
@@ -2180,7 +2180,7 @@
         
         document.getElementById('diagModeLbl').innerText = isTND ? 'TND' : 'USD';
         
-        // --- 1. Calculate Earmarked Assets ---
+        // --- 1. Calculate Envelopes ---
         let envTND = 0; 
         Object.values(s.projects.envelopes || {}).filter(e => !e.archived).forEach(e => { 
             let tgt = parseFloat(e.target) || 0; 
@@ -2189,17 +2189,58 @@
             if (b > 0) envTND += (e.currency === 'USD' ? b * fx : b); 
         });
         
-        let vapeTND = 0;
+        // --- 2. CLEVER VAPE PROJECTION ---
         let cEnd = isTND ? new Date(s.settings.contractStart) : new Date(s.settings.contractEnd);
         let daysLeft = Math.ceil((cEnd.getTime() - Date.now()) / 86400000);
-        
-        // ZERO-DIVISION FIX: Floor days left at 1.
         daysLeft = Math.max(1, daysLeft); 
 
-        if (isTND && daysLeft > 0) {
-            vapeTND = Math.ceil(daysLeft / 4) * 35; 
+        let estDevices = 0;
+        let purchaseDates = [];
+        let modeVapeSpend = 0;
+        let modeVapeDevices = 0;
+
+        ['vacation', 'onboard'].forEach(m => {
+            let isCurrentMode = (m === s.mode);
+            (s.history[m].archive || []).forEach(day => {
+                (day.logs || []).forEach(log => {
+                    if (log.category === '💨 Vape') {
+                        let amt = parseFloat(log.amount) || 0;
+                        let qty = parseInt(log.vapeQty) || 1;
+                        estDevices += qty;
+                        if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
+                        if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
+                        else if (day.date) purchaseDates.push(new Date(day.date));
+                    }
+                });
+            });
+            (s.history[m].current || []).forEach(log => {
+                if (log.category === '💨 Vape') {
+                    let amt = parseFloat(log.amount) || 0;
+                    let qty = parseInt(log.vapeQty) || 1;
+                    estDevices += qty;
+                    if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
+                    if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
+                    else purchaseDates.push(new Date()); 
+                }
+            });
+        });
+
+        let trueVapeBurnRate = 4; // Default fallback
+        if (purchaseDates.length > 0) {
+            purchaseDates.sort((a, b) => a.getTime() - b.getTime());
+            let firstDate = purchaseDates[0];
+            let totalDaysSmoking = Math.max(1, (Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+            trueVapeBurnRate = totalDaysSmoking / estDevices;
         }
+
+        let projectedVapesNeeded = daysLeft / trueVapeBurnRate;
+        let vapesToBuy = Math.max(0, projectedVapesNeeded - (parseInt(s.vape_stash.count) || 0));
+        let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (isTND ? 35 : 10);
         
+        let projectedVapeSpend = vapesToBuy * modeAvgCost;
+        let vapeTND = isTND ? projectedVapeSpend : (projectedVapeSpend * fx);
+
+        // --- 3. Calculate Buffers ---
         let bufTND = 0; 
         (s.projects.goals || []).filter(g => g.lockedFromRunway).forEach(g => { 
             let svd = parseFloat(g.saved) || 0;
@@ -2208,17 +2249,15 @@
         
         let earmarkedTND = envTND + vapeTND + bufTND;
 
-        // --- 2. Calculate Gross Assets ---
+        // --- 4. Calculate Gross Assets & Core Capital ---
         let grossTND = (parseFloat(s.vault.cash_tnd) || 0) + 
                        (parseFloat(s.vault.savings) || 0) + 
                        (((parseFloat(s.vault.cash_usd) || 0) + 
                          (parseFloat(s.vault.brightwell) || 0) + 
                          (parseFloat(s.vault.wise) || 0)) * fx);
         
-        // --- 3. Calculate Core Capital ---
         let coreTND = grossTND - earmarkedTND;
         
-        // Convert for display based on Mode
         let grossDisp = isTND ? grossTND : grossTND / fx;
         let earmarkDisp = isTND ? earmarkedTND : earmarkedTND / fx;
         let coreDisp = isTND ? coreTND : coreTND / fx;
@@ -2227,13 +2266,12 @@
         document.getElementById('diagEarmarked').innerText = "-" + earmarkDisp.toFixed(2) + sym;
         document.getElementById('diagCore').innerText = coreDisp.toFixed(2) + sym;
         
-        // --- 4. Core Forecasts ---
-        let trueBurn = calculateTrueBurn(); // Returns burn in correct mode currency
+        // --- 5. Core Forecasts ---
+        let trueBurn = calculateTrueBurn(); 
         let coreAllowance = coreDisp / daysLeft;
         
         document.getElementById('diagAllowance').innerText = coreAllowance.toFixed(2) + sym + ' / day';
         
-        // ZERO-DIVISION FIX: Check if true burn exists.
         if (trueBurn > 0) {
             let coreRunway = coreDisp / trueBurn;
             document.getElementById('diagRunway').innerText = coreRunway.toFixed(0) + " Days";
@@ -2241,20 +2279,15 @@
             document.getElementById('diagRunway').innerText = "∞ Days (No Burn Data)";
         }
         
-        // --- 5. The Verdict Engine ---
         let v = document.getElementById('diagVerdict');
-        
         if (trueBurn === 0) {
-            v.style.backgroundColor = 'rgba(74, 222, 128, 0.2)'; 
-            v.style.color = 'var(--success)';
+            v.style.backgroundColor = 'rgba(74, 222, 128, 0.2)'; v.style.color = 'var(--success)';
             v.innerText = `🟢 Excellent. No daily burn detected yet. Keep protecting your core capital.`;
         } else if (trueBurn <= coreAllowance) {
-            v.style.backgroundColor = 'rgba(74, 222, 128, 0.2)'; 
-            v.style.color = 'var(--success)';
+            v.style.backgroundColor = 'rgba(74, 222, 128, 0.2)'; v.style.color = 'var(--success)';
             v.innerText = `🟢 Excellent. Your natural lifestyle (${trueBurn.toFixed(1)}) is burning slower than your core allowance (${coreAllowance.toFixed(1)}). You are generating surplus.`;
         } else {
-            v.style.backgroundColor = 'rgba(248, 113, 113, 0.2)'; 
-            v.style.color = 'var(--danger)';
+            v.style.backgroundColor = 'rgba(248, 113, 113, 0.2)'; v.style.color = 'var(--danger)';
             v.innerText = `🔴 Warning. Your natural lifestyle (${trueBurn.toFixed(1)}) is outpacing your core allowance (${coreAllowance.toFixed(1)}). You are bleeding capital. Tighten your daily burn.`;
         }
     }
@@ -2794,58 +2827,93 @@
         let totalSpend = 0;
         let estDevices = 0;
         let purchaseDates = [];
+        
+        let modeVapeSpend = 0;
+        let modeVapeDevices = 0;
 
-        // Aggregate every vape purchase ever made across all modes and times
-        ['vacation', 'onboard'].forEach(mode => {
-            (s.history[mode].archive || []).forEach(day => {
+        // Loop through all history to gather data
+        ['vacation', 'onboard'].forEach(m => {
+            let isCurrentMode = (m === s.mode);
+            
+            (s.history[m].archive || []).forEach(day => {
                 (day.logs || []).forEach(log => {
                     if (log.category === '💨 Vape') {
-                        totalSpend += (parseFloat(log.amount) || 0);
-                        estDevices += 1;
+                        let amt = parseFloat(log.amount) || 0;
+                        let qty = parseInt(log.vapeQty) || 1;
+                        
+                        totalSpend += amt;
+                        estDevices += qty;
+                        
+                        if (isCurrentMode) {
+                            modeVapeSpend += amt;
+                            modeVapeDevices += qty;
+                        }
+
                         if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
                         else if (day.date) purchaseDates.push(new Date(day.date));
                     }
                 });
             });
             
-            (s.history[mode].current || []).forEach(log => {
+            (s.history[m].current || []).forEach(log => {
                 if (log.category === '💨 Vape') {
-                    totalSpend += (parseFloat(log.amount) || 0);
-                    estDevices += 1;
+                    let amt = parseFloat(log.amount) || 0;
+                    let qty = parseInt(log.vapeQty) || 1;
+                    
+                    totalSpend += amt;
+                    estDevices += qty;
+                    
+                    if (isCurrentMode) {
+                        modeVapeSpend += amt;
+                        modeVapeDevices += qty;
+                    }
+
                     if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
                     else purchaseDates.push(new Date()); 
                 }
             });
         });
 
-        // Chronological Sort for Math
         purchaseDates.sort((a, b) => a.getTime() - b.getTime());
 
-        // Calculate Average Days Between Restocks
-        let avgDays = 0;
-        if (purchaseDates.length > 1) {
-            let totalDiff = 0;
-            for (let i = 1; i < purchaseDates.length; i++) {
-                totalDiff += (purchaseDates[i].getTime() - purchaseDates[i - 1].getTime());
-            }
-            avgDays = (totalDiff / (purchaseDates.length - 1)) / (1000 * 60 * 60 * 24);
-        }
-
-        // Calculate Days Since Last Restock
+        let trueVapeBurnRate = 4; // Fallback to 4 days per vape
         let daysSinceLast = 0;
         let lastDateStr = "N/A";
+
         if (purchaseDates.length > 0) {
+            let firstDate = purchaseDates[0];
             let lastDate = purchaseDates[purchaseDates.length - 1];
-            daysSinceLast = Math.floor((new Date().getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            let totalDaysSmoking = Math.max(1, (Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+            trueVapeBurnRate = totalDaysSmoking / estDevices;
+            
+            daysSinceLast = Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
             lastDateStr = lastDate.toLocaleDateString();
         }
 
+        // --- Clever Projection Math ---
+        let isTND = s.mode === 'vacation';
+        let sym = isTND ? 'TND' : 'USD';
+        
+        let phaseEnd = isTND ? new Date(s.settings.contractStart) : new Date(s.settings.contractEnd);
+        let daysLeft = Math.ceil((phaseEnd.getTime() - Date.now()) / 86400000);
+        daysLeft = Math.max(0, daysLeft);
+        
+        let projectedVapesNeeded = daysLeft / trueVapeBurnRate;
+        let vapesToBuy = Math.max(0, projectedVapesNeeded - (parseInt(s.vape_stash.count) || 0));
+        
+        let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (isTND ? 35 : 10);
+        let projectedSpend = vapesToBuy * modeAvgCost;
+
         let h = '';
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Total Lifetime Spend:</span> <strong style="color:var(--danger);">${totalSpend.toFixed(2)} (Combined)</strong></div>`;
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Est. Devices Purchased:</span> <strong>~${estDevices}</strong></div>`;
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Avg Pace Between Restocks:</span> <strong style="color:var(--warning);">${avgDays > 0 ? avgDays.toFixed(1) + ' Days' : 'Calculating...'}</strong></div>`;
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Days Since Last Restock:</span> <strong style="${daysSinceLast < 4 ? 'color:var(--danger);' : 'color:var(--success);'}">${purchaseDates.length > 0 ? daysSinceLast + ' Days (' + lastDateStr + ')' : 'No Data'}</strong></div>`;
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; border-top:1px dashed var(--panel-border); padding-top:6px; margin-top:6px;"><span>Current Stash Inventory:</span> <strong style="color:#a855f7;">${s.vape_stash.count} Devices Ready</strong></div>`;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>True Burn Rate:</span> <strong style="color:var(--warning);">1 Vape / ${trueVapeBurnRate.toFixed(1)} Days</strong></div>`;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Days Since Last Restock:</span> <strong style="${daysSinceLast < trueVapeBurnRate ? 'color:var(--success);' : 'color:var(--danger);'}">${purchaseDates.length > 0 ? daysSinceLast + ' Days (' + lastDateStr + ')' : 'No Data'}</strong></div>`;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Current Stash Inventory:</span> <strong style="color:#a855f7;">${s.vape_stash.count} Devices Ready</strong></div>`;
+        
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; border-top:1px dashed var(--panel-border); padding-top:6px; margin-top:6px;">`;
+        h += `<span>Est. Phase Spend (${daysLeft} Days):</span>`;
+        h += `<strong style="color:#38bdf8;">~${Math.ceil(vapesToBuy)} Vapes (${projectedSpend.toFixed(2)} ${sym})</strong></div>`;
         
         document.getElementById('vapeStatsHtml').innerHTML = h;
     }
