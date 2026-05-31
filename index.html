@@ -456,18 +456,24 @@
                         <div class="sub-title">IBKR (Investments)</div>
                         <div class="v-val" id="v-ibkr">0.00</div>
                     </div>
-                    <div class="vault-item" style="background: var(--input-bg); border-color: var(--accent-primary);">
-                        <div class="sub-title" style="color:var(--text-main);">Net Worth (TND)</div>
-                        <div class="v-val" id="v-total" style="color:var(--accent-primary);">0.00</div>
+                    <div class="vault-item" style="background:rgba(74, 222, 128, 0.1); border-color:var(--success);" onclick="editCapitalSaved()">
+                        <div class="sub-title" style="color:var(--success);">Total Capital Saved</div>
+                        <div class="v-val" id="v-cap-saved" style="color:var(--success);">0.00</div>
                     </div>
                 </div>
                 
+                <div style="background:var(--input-bg); border:1px solid var(--accent-primary); border-radius:12px; padding:12px; text-align:center; margin-bottom:12px;">
+                    <div class="sub-title" style="color:var(--accent-primary);">Net Worth (TND)</div>
+                    <div class="v-val" id="v-total" style="color:var(--accent-primary); font-size:24px;">0.00</div>
+                </div>
+
                 <div class="btn-row">
                     <button class="v-btn btn-secondary" onclick="openIncomeModal()">+ Income</button>
                     <button class="v-btn btn-secondary" onclick="openTransferModal()">⇆ Transfer</button>
                     <button class="v-btn btn-secondary" onclick="openATMModal()">🏧 ATM</button>
                 </div>
             </div>
+
 
             <!-- TODAY'S POCKET -->
             <div class="panel">
@@ -1092,67 +1098,49 @@
     };
 
     // ==========================================
-    // 2. OFFLINE INDEXED-DB STORAGE ENGINE
+    // 2. OFFLINE STORAGE ENGINE (REVERTED FOR iOS)
     // ==========================================
-    function initDB() {
-        return new Promise((resolve, reject) => {
-            let request = indexedDB.open('CrewWalletDB', 1);
-            request.onupgradeneeded = function(e) {
-                let db = e.target.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME);
-                }
-            };
-            request.onsuccess = function(e) { resolve(e.target.result); };
-            request.onerror = function(e) { reject(e); };
-        });
-    }
+    const STORE_NAME = 'CrewWalletMaster';
 
-    async function saveState(bypassRender = false) {
+    function saveState(bypassRender = false) {
         try {
-            let db = await initDB();
-            let tx = db.transaction(STORE_NAME, 'readwrite');
-            tx.objectStore(STORE_NAME).put(s, 'master_data');
-            // Fail-safe redundant backup for the migration
-            localStorage.setItem('CrewWallet_V39_Emergency_Backup', JSON.stringify(s));
+            localStorage.setItem(STORE_NAME, JSON.stringify(s));
             if (!bypassRender) renderApp();
-        } catch(e) { console.error("Save Error:", e); }
+        } catch(e) {
+            console.error("Save Error:", e);
+            alert("iOS Storage Error: Unable to save. Try closing Safari tabs or clearing cache.");
+        }
     }
 
-    function loadState() {
-        return new Promise(async (resolve) => {
-            try {
-                let db = await initDB();
-                let tx = db.transaction(STORE_NAME, 'readonly');
-                let request = tx.objectStore(STORE_NAME).get('master_data');
-                
-                request.onsuccess = function(e) {
-                    if (e.target.result) {
-                        s = e.target.result;
-                    } else {
-                        let backup = localStorage.getItem('CrewWalletMaster') || localStorage.getItem('CrewWallet_V37_Emergency_Backup');
-                        if (backup) {
-                            s = JSON.parse(backup);
-                            document.getElementById('rescueBanner').style.display = 'block';
-                            setTimeout(() => { document.getElementById('rescueBanner').style.display = 'none'; }, 5000);
-                        } else {
-                            s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
-                        }
-                    }
-                    migrateData();
-                    resolve(); 
-                };
-                request.onerror = function() {
-                    s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
-                    migrateData();
-                    resolve();
-                };
-            } catch (e) {
+    async function loadState() {
+        try {
+            let data = localStorage.getItem(STORE_NAME) || localStorage.getItem('CrewWallet_V37_Emergency_Backup');
+            if (data) {
+                s = JSON.parse(data);
+            } else {
                 s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
-                migrateData();
-                resolve();
             }
-        });
+            migrateData();
+        } catch (e) {
+            s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
+            migrateData();
+        }
+    }
+
+    async function editCapitalSaved() {
+        let isTND = s.mode === 'vacation';
+        let curVal = isTND ? (parseFloat(s.capital_saved_tnd) || 0) : (parseFloat(s.capital_saved_usd) || 0);
+        let sym = isTND ? 'TND' : 'USD';
+        
+        let val = await openUPrompt(`Edit Total Capital Saved (${sym})`, `Enter new total:`, curVal);
+        if (val !== null) {
+            let parsed = parseFloat(val);
+            if (!isNaN(parsed)) {
+                if (isTND) s.capital_saved_tnd = parsed;
+                else s.capital_saved_usd = parsed;
+                saveState();
+            }
+        }
     }
 
 
@@ -1460,6 +1448,7 @@
         
         let netTND = tnd + sav + ((usd + wise + bw + ibkrTot) * fx);
         document.getElementById('v-total').innerText = netTND.toFixed(2);
+        document.getElementById('v-cap-saved').innerText = (isTND ? parseFloat(s.capital_saved_tnd) || 0 : parseFloat(s.capital_saved_usd) || 0).toFixed(2) + (isTND ? ' TND' : ' USD');
 
         // --- 2. Today's Pocket & Ledger ---
         let limit = parseFloat(s.history[s.mode].limit) || 0;
@@ -2158,14 +2147,20 @@
         let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (isTND ? 35 : 10);
         let stashValTND = isTND ? ((s.vape_stash.count || 0) * modeAvgCost) : ((s.vape_stash.count || 0) * modeAvgCost * fx);
         
-        let html = `<div style="display:flex; justify-content:space-between; align-items:center;">`;
+        let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">`;
         html += `<div><div style="font-size:24px; font-weight:800; color:var(--text-main);">${s.vape_stash.count || 0} <span style="font-size:12px; font-weight:normal; color:var(--text-muted);">Devices Stashed</span></div>`;
-        html += `<div style="font-size:11px; color:var(--text-muted);">Est. Value: ${stashValTND.toFixed(2)} TND</div></div>`;
+        html += `<div style="font-size:11px; color:var(--text-muted);">Est. Value: ${stashValTND.toFixed(2)} ${isTND ? 'TND' : 'USD'}</div></div>`;
         html += `<div style="font-size:11px; text-align:right;">Avg Cost: ${modeAvgCost.toFixed(2)} ${isTND ? 'TND' : 'USD'}<br>Total Logged: ${estDevices}</div>`;
+        html += `</div>`;
+        
+        html += `<div style="background:var(--input-bg); padding:12px; border-radius:12px; text-align:center; border:1px solid #a855f7;">`;
+        html += `<div style="font-size:11px; color:var(--text-muted);">Total Historical Spend</div>`;
+        html += `<div style="font-size:18px; font-weight:bold; color:#a855f7;">${modeVapeSpend.toFixed(2)} ${isTND ? 'TND' : 'USD'}</div>`;
         html += `</div>`;
         
         document.getElementById('vapeStatsHtml').innerHTML = html;
     }
+
 
     // ==========================================
     // 11. TIME MACHINE & INCOME LEDGER
@@ -2242,15 +2237,18 @@
         let html = '';
         (s.income_logs || []).forEach((inc) => {
             let amt = parseFloat(inc.amt) || 0;
+            // The crash fix: defaults to 'Custom' if the old log is missing a source
+            let src = (inc.src || 'Custom').toUpperCase(); 
             let detStr = inc.det ? ` - ${inc.det}` : '';
             html += `<div class="history-item">`;
-            html += `<div><strong>${inc.src.toUpperCase()}</strong><span style="font-size:10px; color:var(--text-muted); margin-left:8px;">${inc.date || ''}</span>`;
-            html += `<div class="history-details">To: ${inc.wallet}${detStr}</div></div>`;
+            html += `<div><strong>${src}</strong><span style="font-size:10px; color:var(--text-muted); margin-left:8px;">${inc.date || ''}</span>`;
+            html += `<div class="history-details">To: ${inc.wallet || 'Unknown'}${detStr}</div></div>`;
             html += `<div style="display:flex; align-items:center;"><span style="color:var(--success); font-weight:bold;">+${amt.toFixed(2)}</span>`;
             html += `<button class="edit-btn" onclick="openEditIncomeModal('${inc.id}')">✏️</button></div></div>`;
         });
         document.getElementById('incomeList').innerHTML = html || '<div style="font-size:11px; color:var(--text-muted); text-align:center; padding:10px 0;">No income logs.</div>';
     }
+
 
     // ==========================================
     // 12. STB LOAN & IOU DEBT ENGINE
