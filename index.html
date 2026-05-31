@@ -1636,6 +1636,10 @@
     // ==========================================
     // 2. THE DEEP-CLEAN MIGRATION PROTOCOL
     // ==========================================
+
+    // ==========================================
+    // 2. THE DEEP-CLEAN MIGRATION PROTOCOL
+    // ==========================================
     async function migrateData() {
         if (!s || !s.vault || !s.history) {
             s = USER_PRISTINE_DATA;
@@ -1651,32 +1655,64 @@
         if (s.missions) { s.projects.missions = s.missions; delete s.missions; }
         if (s.goals) { s.projects.goals = s.goals; delete s.goals; }
 
-        // 2. REPAIR LEGACY LOGS (cost -> amount, name -> desc) & ENFORCE TYPES
+        // 2. FIX V37 IOUS (Map 'name' -> 'who', 'amount' -> 'amt')
+        ['payables', 'receivables'].forEach(type => {
+            (s.ious[type] || []).forEach(iou => {
+                if (iou.name !== undefined) { iou.who = iou.name; delete iou.name; }
+                if (iou.amount !== undefined) { iou.amt = iou.amount; delete iou.amount; }
+                iou.amt = parseFloat(iou.amt) || 0;
+            });
+        });
+
+        // 3. FIX V37 INCOME (Map 'amount' -> 'amt', 'source' -> 'src', 'details' -> 'det')
+        if (!s.income_logs) s.income_logs = [];
+        s.income_logs.forEach(inc => {
+            if (inc.amount !== undefined) { inc.amt = inc.amount; delete inc.amount; }
+            if (inc.source !== undefined) { inc.src = inc.source; delete inc.source; }
+            if (inc.details !== undefined) { inc.det = inc.details; delete inc.details; }
+            inc.amt = parseFloat(inc.amt) || 0;
+        });
+
+        // 4. FIX V37 EXPENSE LOGS & TIME MACHINE DATES
         ['vacation', 'onboard'].forEach(m => {
             if (s.history && s.history[m]) {
                 
+                // Helper to map old V37 Expense Keys
+                let mapExpenseKeys = (item) => {
+                    if (item.tag !== undefined) { item.desc = item.tag; delete item.tag; }
+                    if (item.name !== undefined) { item.desc = item.name; delete item.name; } 
+                    if (item.cost !== undefined) { item.amount = item.cost; delete item.cost; }
+                    if (item.walletSource !== undefined) { item.wallet = item.walletSource; delete item.walletSource; }
+                    
+                    // Generate a readable time string if it only has a raw timestamp (ts)
+                    if (item.ts && !item.time) {
+                        item.time = new Date(item.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+                    
+                    item.amount = parseFloat(item.amount) || 0;
+                };
+
                 // Repair Current Array
                 if (s.history[m].current && Array.isArray(s.history[m].current)) {
-                    s.history[m].current.forEach(item => {
-                        if (item.name !== undefined) { item.desc = item.name; delete item.name; }
-                        if (item.cost !== undefined) { item.amount = item.cost; delete item.cost; }
-                        item.amount = parseFloat(item.amount) || 0; // The ultimate fail-safe
-                    });
+                    s.history[m].current.forEach(mapExpenseKeys);
                 } else {
                     s.history[m].current = [];
                 }
 
-                // Repair Archive Array
+                // Repair Archive Array & Time Machine Date format
                 if (s.history[m].archive && Array.isArray(s.history[m].archive)) {
                     s.history[m].archive.forEach(day => {
                         day.surplus = parseFloat(day.surplus) || 0;
                         day.limit = parseFloat(day.limit) || 0;
+                        
+                        // TIME MACHINE FIX: Convert "Tue May 19 2026" to "5/19/2026" (Locale Standard)
+                        // This allows the HTML5 calendar picker to match dates perfectly.
+                        if (day.date && isNaN(Date.parse(day.date)) === false && day.date.includes(" ")) {
+                            day.date = new Date(day.date).toLocaleDateString();
+                        }
+
                         if (day.logs && Array.isArray(day.logs)) {
-                            day.logs.forEach(item => {
-                                if (item.name !== undefined) { item.desc = item.name; delete item.name; }
-                                if (item.cost !== undefined) { item.amount = item.cost; delete item.cost; }
-                                item.amount = parseFloat(item.amount) || 0;
-                            });
+                            day.logs.forEach(mapExpenseKeys);
                         } else {
                             day.logs = [];
                         }
@@ -1687,8 +1723,7 @@
             }
         });
 
-        // 3. INITIALIZE MISSING V38 VARIABLES
-        if (!s.income_logs) s.income_logs = [];
+        // 5. INITIALIZE MISSING V38 VARIABLES
         if (!s.fx_rate || isNaN(s.fx_rate)) s.fx_rate = 2.923;
         s.fx_rate = parseFloat(s.fx_rate) || 2.923;
 
@@ -1704,12 +1739,12 @@
         
         if (s.capital_saved_tnd === undefined) {
             s.capital_saved_tnd = (s.capital_saved !== undefined) ? parseFloat(s.capital_saved) || 0 : 0;
-            if (Math.abs(s.capital_saved_tnd - 103.2) < 0.01) s.capital_saved_tnd = 68.2; // Legacy override
+            if (Math.abs(s.capital_saved_tnd - 103.2) < 0.01) s.capital_saved_tnd = 68.2;
             s.capital_saved_usd = 0;
             delete s.capital_saved;
         }
 
-        // 4. REPAIR VAULT TYPES
+        // 6. REPAIR VAULT TYPES
         s.vault.ibkr_cash = parseFloat(s.vault.ibkr_cash) || parseFloat(s.vault.ibkr) || 0;
         s.vault.ibkr_shares = parseFloat(s.vault.ibkr_shares) || 0;
         s.vault.ibkr_cost = parseFloat(s.vault.ibkr_cost) || 0;
@@ -1719,7 +1754,7 @@
             s.vault[k] = parseFloat(s.vault[k]) || 0;
         });
 
-        // 5. REPAIR LOAN TYPES
+        // 7. REPAIR LOAN TYPES
         if (!s.loan.overdraft) s.loan.overdraft = 0;
         if (!s.loan.last_interest_ts) s.loan.last_interest_ts = Date.now();
         if (s.loan.targetDate === undefined) s.loan.targetDate = "";
@@ -1730,7 +1765,7 @@
              s.loan.overdraft = 516.00;
         }
 
-        // 6. REPAIR PROJECT TYPES & FLAGS
+        // 8. REPAIR PROJECT TYPES & FLAGS
         Object.keys(s.projects.envelopes).forEach(k => { 
             let e = s.projects.envelopes[k];
             if (e.archived === undefined) e.archived = false; 
@@ -1751,16 +1786,16 @@
         
         s.projects.goals.forEach(g => {
             if (!g.currency) g.currency = 'TND';
-            if (g.lockedFromRunway === undefined) g.lockedFromRunway = false; // V38 Addition
+            if (g.lockedFromRunway === undefined) g.lockedFromRunway = false;
             g.target = parseFloat(g.target) || 0;
             g.saved = parseFloat(g.saved) || 0;
         });
 
-        // 7. EXECUTE MATHEMATICAL UPDATES
+        // 9. EXECUTE MATHEMATICAL UPDATES
         processInterestBleed();
         processVacationArrears();
         
-        // 8. BOOT THE APP
+        // 10. BOOT THE APP
         checkLock();
     }
 
