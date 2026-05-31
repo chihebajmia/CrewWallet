@@ -657,11 +657,21 @@
              TAB 5: SETUP & SETTINGS
              ========================================== -->
         <div id="tab-setup" class="tab-content hidden">
+            
+            <div class="panel" style="border-color:var(--warning); background:rgba(217, 119, 6, 0.05);">
+                <div class="title" style="color:var(--warning); margin-bottom:10px;">Data Rescue</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">If your data vanished after the update, use this sonar to scan your device's memory for hidden V38 data.</div>
+                <button class="v-btn" style="background:var(--warning); color:#000;" onclick="emergencyDataRescue()">📡 Scan & Rescue Lost Data</button>
+            </div>
+
             <div class="panel">
                 <div class="title">System Configuration</div>
                 
                 <label style="font-size:12px; color:var(--text-muted);">Current FX Rate (USD to TND)</label>
-                <input type="number" id="setFx" inputmode="decimal" style="margin-bottom:15px;">
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <input type="number" id="setFx" inputmode="decimal" style="flex:1; margin-bottom:0;">
+                    <button class="v-btn btn-secondary" style="width:auto; margin:0;" onclick="fetchLiveFX(event)">🔄 Auto</button>
+                </div>
                 
                 <label style="font-size:12px; color:var(--text-muted);">Vacation Phase</label>
                 <div style="display:flex; gap:10px; margin-bottom:15px;">
@@ -680,6 +690,7 @@
                 
                 <button class="v-btn" onclick="saveSettings()">Save Configuration</button>
             </div>
+
             
             <div class="panel" style="border-color:var(--danger);">
                 <div class="title" style="color:var(--danger);">Danger Zone & Backup</div>
@@ -1108,37 +1119,42 @@
         } catch(e) { console.error("Save Error:", e); }
     }
 
-    async function loadState() {
-        try {
-            let db = await initDB();
-            let tx = db.transaction(STORE_NAME, 'readonly');
-            let request = tx.objectStore(STORE_NAME).get('master_data');
-            
-            request.onsuccess = function(e) {
-                if (e.target.result) {
-                    s = e.target.result;
-                } else {
-                    // Try to salvage V37/V38 localStorage backups if IndexedDB is empty
-                    let backup = localStorage.getItem('CrewWalletMaster') || localStorage.getItem('CrewWallet_V37_Emergency_Backup');
-                    if (backup) {
-                        s = JSON.parse(backup);
-                        document.getElementById('rescueBanner').style.display = 'block';
-                        setTimeout(() => { document.getElementById('rescueBanner').style.display = 'none'; }, 5000);
+    function loadState() {
+        return new Promise(async (resolve) => {
+            try {
+                let db = await initDB();
+                let tx = db.transaction(STORE_NAME, 'readonly');
+                let request = tx.objectStore(STORE_NAME).get('master_data');
+                
+                request.onsuccess = function(e) {
+                    if (e.target.result) {
+                        s = e.target.result;
                     } else {
-                        s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
+                        let backup = localStorage.getItem('CrewWalletMaster') || localStorage.getItem('CrewWallet_V37_Emergency_Backup');
+                        if (backup) {
+                            s = JSON.parse(backup);
+                            document.getElementById('rescueBanner').style.display = 'block';
+                            setTimeout(() => { document.getElementById('rescueBanner').style.display = 'none'; }, 5000);
+                        } else {
+                            s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
+                        }
                     }
-                }
-                migrateData();
-            };
-            request.onerror = function() {
+                    migrateData();
+                    resolve(); 
+                };
+                request.onerror = function() {
+                    s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
+                    migrateData();
+                    resolve();
+                };
+            } catch (e) {
                 s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
                 migrateData();
-            };
-        } catch (e) {
-            s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
-            migrateData();
-        }
+                resolve();
+            }
+        });
     }
+
 
     // ==========================================
     // 3. THE DEEP-CLEAN MIGRATION PROTOCOL
@@ -2153,48 +2169,74 @@
 
     // ==========================================
     // 11. TIME MACHINE & INCOME LEDGER
-    // ==========================================
+    // ==========================================    
+    
     function loadPastDay() {
         let dateVal = document.getElementById('tmDate').value;
+        let todayObj = new Date();
+        let offset = todayObj.getTimezoneOffset() * 60000;
+        let localISOToday = (new Date(todayObj - offset)).toISOString().split('T')[0];
+
         if (!dateVal) {
-            let today = new Date();
-            let offset = today.getTimezoneOffset() * 60000;
-            let localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
-            document.getElementById('tmDate').value = localISOTime;
-            dateVal = localISOTime;
+            dateVal = localISOToday;
+            document.getElementById('tmDate').value = dateVal;
         }
         
-        let targetDateObj = new Date(dateVal + "T00:00:00");
-        let searchDate = targetDateObj.toLocaleDateString();
+        let isToday = (dateVal === localISOToday);
+        let [y, m, d] = dateVal.split('-');
+        let targetTime = new Date(y, m-1, d).getTime();
 
-        let dayData = (s.history[s.mode].archive || []).find(x => x.date === searchDate);
-        let aIndex = (s.history[s.mode].archive || []).findIndex(x => x.date === searchDate);
+        let dayData = null;
+        let aIndex = -1;
+
+        if (isToday) {
+            dayData = { 
+                logs: s.history[s.mode].current, 
+                limit: s.history[s.mode].limit, 
+                surplus: s.history[s.mode].balance 
+            };
+        } else {
+            let archive = s.history[s.mode].archive || [];
+            for (let i = 0; i < archive.length; i++) {
+                let arcD = new Date(archive[i].date);
+                let arcTime = new Date(arcD.getFullYear(), arcD.getMonth(), arcD.getDate()).getTime();
+                if (arcTime === targetTime) {
+                    dayData = archive[i];
+                    aIndex = i;
+                    break;
+                }
+            }
+        }
         
-        if (dayData) {
+        let tmList = document.getElementById('tmList');
+        if (dayData && dayData.logs && dayData.logs.length > 0) {
             let sym = s.mode === 'vacation' ? ' TND' : ' USD';
-            document.getElementById('tmLimitDisplay').innerText = `Limit: ${parseFloat(dayData.limit || 0).toFixed(2)}${sym}`;
-            let surp = parseFloat(dayData.surplus || 0);
+            document.getElementById('tmLimitDisplay').innerText = `Limit: ${(parseFloat(dayData.limit) || 0).toFixed(2)}${sym}`;
+            let surp = parseFloat(dayData.surplus) || 0;
             let surpEl = document.getElementById('tmSurplusDisplay');
             surpEl.innerText = `Surplus: ${surp.toFixed(2)}${sym}`;
             surpEl.style.color = surp >= 0 ? "var(--success)" : "var(--danger)";
             
             let html = '';
-            (dayData.logs || []).forEach((item, i) => {
+            let logType = isToday ? 'current' : 'archive';
+            
+            dayData.logs.forEach((item, i) => {
                 let amt = parseFloat(item.amount) || 0;
                 html += `<div class="history-item">`;
-                html += `<div><strong>${item.desc || 'Expense'}</strong><span class="cat-badge">${item.category || 'N/A'}</span>`;
+                html += `<div><strong style="color:var(--text-main);">${item.desc || 'Expense'}</strong><span class="cat-badge">${item.category || 'N/A'}</span>`;
                 html += `<div class="history-details">${item.time || ''} | ${item.location || '--'}${item.bypassLimit ? ' | ⚠️ Bypass' : ''}</div></div>`;
                 html += `<div style="text-align:right;"><span style="color:var(--danger); font-weight:bold;">-${amt.toFixed(2)}</span>`;
-                html += `<div><button class="edit-btn" onclick="deleteExpense(${i}, 'archive', ${aIndex})">🗑️</button></div></div></div>`;
+                html += `<div><button class="edit-btn" onclick="deleteExpense(${i}, '${logType}', ${aIndex})">🗑️</button></div></div></div>`;
             });
-            document.getElementById('tmList').innerHTML = html || '<div style="font-size:11px; color:var(--text-muted); text-align:center; padding:10px 0;">No logs found.</div>';
+            tmList.innerHTML = html;
         } else {
             document.getElementById('tmLimitDisplay').innerText = `Limit: --`;
             document.getElementById('tmSurplusDisplay').innerText = `Surplus: --`;
             document.getElementById('tmSurplusDisplay').style.color = "var(--text-muted)";
-            document.getElementById('tmList').innerHTML = '<div style="font-size:11px; color:var(--text-muted); text-align:center; padding:10px 0;">No data for this date.</div>';
+            tmList.innerHTML = '<div style="font-size:11px; color:var(--text-muted); text-align:center; padding:10px 0;">No logs found for this date.</div>';
         }
     }
+
 
     function renderIncomeLogs() {
         let html = '';
@@ -2626,6 +2668,54 @@
         // Ensure proper PWA viewport sizing on iOS
         setTimeout(() => { window.scrollTo(0, 1); }, 100);
     };
+
+        
+    // ==========================================
+    // DATA RESCUE & LIVE FX ENGINE
+    // ==========================================
+    async function fetchLiveFX(event) {
+        try {
+            let btn = event.target;
+            btn.innerText = "⏳...";
+            let res = await fetch('https://open.er-api.com/v6/latest/USD');
+            let data = await res.json();
+            let rate = data.rates.TND;
+            if(rate) {
+                document.getElementById('setFx').value = rate.toFixed(3);
+                s.fx_rate = rate;
+                saveState();
+                alert(`FX automatically updated to ${rate.toFixed(3)} TND`);
+            }
+            btn.innerText = "🔄 Auto";
+        } catch(e) {
+            alert("Network error fetching FX. Please try again.");
+            event.target.innerText = "🔄 Auto";
+        }
+    }
+
+    function emergencyDataRescue() {
+        let found = false;
+        for (let i = 0; i < localStorage.length; i++) {
+            let key = localStorage.key(i);
+            try {
+                let val = localStorage.getItem(key);
+                let obj = JSON.parse(val);
+                if (obj && (obj.history || obj.vault || obj.envelopes)) {
+                    s = obj;
+                    found = true;
+                    migrateData();
+                    saveState();
+                    alert(`🚨 RESCUE SUCCESSFUL! Found trapped data under key: [${key}]. Check your dashboard.`);
+                    window.location.reload();
+                    return;
+                }
+            } catch(e) { }
+        }
+        
+        if (!found) {
+            alert("Sonar complete: No hidden data found. If you recently cleared your Safari Website Data, the database was wiped by iOS. Please use 'Restore from Backup' to upload your JSON file.");
+        }
+    }
 
 </script>
 </body>
