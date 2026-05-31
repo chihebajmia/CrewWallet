@@ -2836,15 +2836,22 @@
             let html = ''; 
             Object.keys(obj || {}).forEach(k => {
                 let p = obj[k]; 
-                if (p.archived) return;
-                
                 let spt = parseFloat(p.spent) || 0; 
                 let tgt = parseFloat(p.target) || 0;
                 let pct = tgt > 0 ? Math.min((spt / tgt) * 100, 100) : 0;
                 
-                html += `<div class="vault-item" style="text-align:left;" onclick="openProjectDetails('${prefix}_${k}')">`;
-                html += `<div style="display:flex; justify-content:space-between;">`;
-                html += `<strong>${p.name || 'Untitled'}</strong><span style="color:var(--text-muted);">${p.currency}</span></div>`;
+                html += `<div class="vault-item" style="text-align:left; border:${p.archived ? '1px dashed #64748b' : '1px solid var(--panel-border)'};">`;
+                html += `<div style="display:flex; justify-content:space-between; align-items:center;">`;
+                html += `<strong>${p.name || 'Untitled'} ${p.archived ? '(Archived)' : ''}</strong>`;
+                
+                html += `<div style="display:flex; gap:8px;">`;
+                if (!p.archived) {
+                    html += `<button onclick="archiveProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--warning); cursor:pointer;">Archive</button>`;
+                } else {
+                    html += `<button onclick="deleteProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Delete</button>`;
+                }
+                html += `</div></div>`;
+                
                 html += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
                 html += `<div class="progress-bar" style="width:${pct}%; background:${pct >= 100 ? 'var(--danger)' : 'var(--accent)'};"></div></div>`;
                 html += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${spt.toFixed(2)} / ${tgt.toFixed(2)} ${p.currency}</div></div>`;
@@ -2862,14 +2869,60 @@
             let tgt = parseFloat(g.target) || 0;
             let pct = tgt > 0 ? Math.min((svd / tgt) * 100, 100) : 0;
             
-            gHtml += `<div class="vault-item" style="text-align:left;" onclick="addGoalFunds(${i})">`;
-            gHtml += `<div style="display:flex; justify-content:space-between;">`;
-            gHtml += `<strong>${g.name || 'Untitled'}</strong><span style="color:var(--text-muted);">${g.currency}</span></div>`;
+            gHtml += `<div class="vault-item" style="text-align:left; border:1px solid var(--panel-border);">`;
+            gHtml += `<div style="display:flex; justify-content:space-between; align-items:center;">`;
+            gHtml += `<strong>${g.name || 'Untitled'}</strong>`;
+            
+            gHtml += `<div style="display:flex; gap:8px;">`;
+            if (g.lockedFromRunway || (g.name && g.name.includes("🛡️"))) {
+                gHtml += `<button onclick="deleteBuffer(${i})" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Unlock & Delete</button>`;
+            } else {
+                gHtml += `<button onclick="addGoalFunds(${i})" style="background:none; border:none; font-size:10px; color:var(--success); cursor:pointer;">Edit</button>`;
+                gHtml += `<button onclick="deleteGoal(${i})" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Delete</button>`;
+            }
+            gHtml += `</div></div>`;
+            
             gHtml += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
             gHtml += `<div class="progress-bar" style="width:${pct}%; background:var(--success);"></div></div>`;
             gHtml += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${svd.toFixed(2)} / ${tgt.toFixed(2)} ${g.currency}</div></div>`;
         });
         document.getElementById('goalsContainer').innerHTML = gHtml;
+    }
+
+    async function archiveProject(type, id) {
+        let c = await openUConfirm("Archive", "Archive this tracker? It will be moved to the Archived folder.");
+        if (c) {
+            if (type === 'env') s.projects.envelopes[id].archived = true;
+            if (type === 'mis') s.projects.missions[id].archived = true;
+            saveState();
+        }
+    }
+
+    async function deleteProject(type, id) {
+        let c = await openUConfirm("Delete", "Permanently delete this tracker? History logs mapped to it will lose their association.");
+        if (c) {
+            if (type === 'env') delete s.projects.envelopes[id];
+            if (type === 'mis') delete s.projects.missions[id];
+            saveState();
+        }
+    }
+
+    async function deleteGoal(index) {
+        let c = await openUConfirm("Delete Goal", "Permanently delete this savings goal?");
+        if (c) {
+            s.projects.goals.splice(index, 1);
+            saveState();
+        }
+    }
+
+    async function deleteBuffer(index) {
+        let c = await openUConfirm("Unlock Buffer", "Delete this locked buffer and return the funds to your Liquid Runway?");
+        if (c) {
+            // Because the buffer is an on-the-fly mathematical earmark, deleting it 
+            // instantly restores the funds to the Liquid Runway pacing algorithm.
+            s.projects.goals.splice(index, 1);
+            saveState();
+        }
     }
 
     async function addGoalFunds(i) {
