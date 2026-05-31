@@ -1486,7 +1486,75 @@
             </div>
         </div>
     </div>
+    <!-- V38 IOU ENGINE MODALS -->
+    <div class="modal-overlay" id="iouModal">
+        <div class="modal-content">
+            <div class="title" id="iouModalTitle" style="text-align:center; color:var(--warning);">Log IOU</div>
+            <input type="hidden" id="iouType">
+            
+            <input type="text" id="iouWho" placeholder="Who? (Name)" style="margin-top:10px; width:100%;">
+            
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <input type="number" id="iouAmt" placeholder="Amount" style="flex:2;" inputmode="decimal">
+                <select id="iouCurrency" style="flex:1;">
+                    <option value="TND">TND</option>
+                    <option value="USD">USD</option>
+                </select>
+            </div>
+            
+            <input type="text" id="iouDesc" placeholder="Context / Reason" style="margin-top:10px; width:100%;">
 
+            <div style="margin-top:15px; background:var(--vault-bg); padding:10px; border-radius:8px; border:1px dashed var(--panel-border);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label id="iouWalletLabel" style="font-size:11px;">Affect wallet balance?</label>
+                    <input type="checkbox" id="iouAffectWallet" onchange="document.getElementById('iouWalletSelect').style.display = this.checked ? 'block' : 'none'">
+                </div>
+                <select id="iouWalletSelect" style="margin-top:10px; width:100%; display:none;">
+                    <option value="cash_tnd">Cash (TND)</option>
+                    <option value="cash_usd">Cash (USD)</option>
+                    <option value="brightwell">Brightwell (USD)</option>
+                    <option value="wise">Wise (USD)</option>
+                    <option value="savings">Savings (TND)</option>
+                </select>
+            </div>
+
+            <div class="modal-btn-row">
+                <button class="btn-secondary" onclick="document.getElementById('iouModal').style.display='none'">Cancel</button>
+                <button class="v-btn" id="iouSubmitBtn" style="background:var(--warning); color:#000;" onclick="submitIOU()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="resolveIouModal">
+        <div class="modal-content">
+            <div class="title" id="resIouTitle" style="text-align:center;">Resolve IOU</div>
+            <div style="font-size:11px; text-align:center; color:var(--text-muted); margin-bottom:15px;" id="resIouMsg"></div>
+            
+            <div style="margin-top:15px; background:var(--vault-bg); padding:10px; border-radius:8px; border:1px dashed var(--panel-border);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label id="resIouWalletLabel" style="font-size:11px;">Affect wallet balance?</label>
+                    <input type="checkbox" id="resIouAffect" onchange="document.getElementById('resIouWalletSelect').style.display = this.checked ? 'block' : 'none'">
+                </div>
+                <select id="resIouWalletSelect" style="margin-top:10px; width:100%; display:none;">
+                    <option value="cash_tnd">Cash (TND)</option>
+                    <option value="cash_usd">Cash (USD)</option>
+                    <option value="brightwell">Brightwell (USD)</option>
+                    <option value="wise">Wise (USD)</option>
+                    <option value="savings">Savings (TND)</option>
+                </select>
+            </div>
+            
+            <input type="hidden" id="resIouType">
+            <input type="hidden" id="resIouIndex">
+
+            <div class="modal-btn-row">
+                <button class="btn-secondary" onclick="document.getElementById('resolveIouModal').style.display='none'">Cancel</button>
+                <button class="v-btn" id="resIouSubmitBtn" style="background:var(--accent); color:#000;" onclick="confirmResolveIOU()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAVIGATION -->
     <div class="bottom-nav">
         <button class="nav-btn active" id="nav-dash" onclick="switchTab('dash')"><span class="nav-icon">🏦</span>Dash</button>
         <button class="nav-btn" id="nav-debt" onclick="switchTab('debt')"><span class="nav-icon">⚖️</span>Debt</button>
@@ -2986,48 +3054,151 @@
     // ==========================================
     // 10. DEBT UI & IOU LEDGERS
     // ==========================================
-    function renderIOUs() {
+
+        function renderIOUs() {
         let pH = ''; 
         (s.ious.payables || []).forEach((p, i) => { 
             let amt = parseFloat(p.amt) || 0;
+            let cur = p.currency || 'TND';
             pH += `<div class="iou-item">`;
             pH += `<div><strong style="color:var(--warning);">${p.who || 'Unknown'}</strong><div style="font-size:10px; color:var(--text-muted);">${p.desc || ''}</div></div>`;
-            pH += `<div><span style="color:var(--warning); font-weight:bold; margin-right:10px;">${amt.toFixed(2)}</span><button class="iou-btn" onclick="resolveIOU('payable', ${i})">Settle</button></div></div>`; 
+            pH += `<div><span style="color:var(--warning); font-weight:bold; margin-right:10px;">${amt.toFixed(2)} ${cur}</span><button class="iou-btn" onclick="openResolveIOU('payable', ${i})">Settle</button></div></div>`; 
         });
         document.getElementById('payablesList').innerHTML = pH || '<div style="font-size:11px; color:var(--text-muted);">No payables. You are clear.</div>';
         
         let rH = ''; 
         (s.ious.receivables || []).forEach((r, i) => { 
             let amt = parseFloat(r.amt) || 0;
+            let cur = r.currency || 'TND';
             rH += `<div class="iou-item">`;
             rH += `<div><strong style="color:var(--success);">${r.who || 'Unknown'}</strong><div style="font-size:10px; color:var(--text-muted);">${r.desc || ''}</div></div>`;
-            rH += `<div><span style="color:var(--success); font-weight:bold; margin-right:10px;">${amt.toFixed(2)}</span><button class="iou-btn" onclick="resolveIOU('receivable', ${i})">Collect</button></div></div>`; 
+            rH += `<div><span style="color:var(--success); font-weight:bold; margin-right:10px;">${amt.toFixed(2)} ${cur}</span><button class="iou-btn" onclick="openResolveIOU('receivable', ${i})">Collect</button></div></div>`; 
         });
         document.getElementById('receivablesList').innerHTML = rH || '<div style="font-size:11px; color:var(--text-muted);">No receivables.</div>';
     }
 
-    async function addIOU(type) {
-        let who = await openUPrompt("Who?", "Enter person's name:"); 
-        if (!who) return;
-        
-        let amtStr = await openUPrompt("Amount", "Enter exact amount:"); 
-        let amt = parseFloat(amtStr);
-        if (isNaN(amt) || amt <= 0) return;
-        
-        let desc = await openUPrompt("Context", "What is this for?");
-        
-        s.ious[type + "s"].push({ 
-            who: who, 
-            amt: amt, 
-            desc: desc || '' 
-        }); 
-        
-        saveState();
+    function addIOU(type) {
+        document.getElementById('iouType').value = type;
+        document.getElementById('iouWho').value = '';
+        document.getElementById('iouAmt').value = '';
+        document.getElementById('iouDesc').value = '';
+        document.getElementById('iouAffectWallet').checked = false;
+        document.getElementById('iouWalletSelect').style.display = 'none';
+
+        let titleEl = document.getElementById('iouModalTitle');
+        let labelEl = document.getElementById('iouWalletLabel');
+        let btnEl = document.getElementById('iouSubmitBtn');
+
+        if (type === 'payable') {
+            titleEl.innerText = "💸 Log Payable (I Borrowed)";
+            titleEl.style.color = "var(--warning)";
+            labelEl.innerText = "Did you receive these borrowed funds into a wallet?";
+            btnEl.style.background = "var(--warning)";
+        } else {
+            titleEl.innerText = "📥 Log Receivable (I Lent)";
+            titleEl.style.color = "var(--success)";
+            labelEl.innerText = "Did you deduct this lent money from a wallet?";
+            btnEl.style.background = "var(--success)";
+        }
+
+        document.getElementById('iouModal').style.display = 'flex';
     }
 
-    function resolveIOU(type, i) { 
-        s.ious[type + "s"].splice(i, 1); 
-        saveState(); 
+    function submitIOU() {
+        let type = document.getElementById('iouType').value;
+        let who = document.getElementById('iouWho').value.trim();
+        let amt = parseFloat(document.getElementById('iouAmt').value);
+        let cur = document.getElementById('iouCurrency').value;
+        let desc = document.getElementById('iouDesc').value.trim();
+        let affect = document.getElementById('iouAffectWallet').checked;
+        let wallet = document.getElementById('iouWalletSelect').value;
+
+        if (!who || isNaN(amt) || amt <= 0) return alert("Valid name and amount required.");
+
+        if (affect) {
+            let isWalletUSD = (wallet === 'cash_usd' || wallet === 'brightwell' || wallet === 'wise');
+            let isIouUSD = (cur === 'USD');
+            let fx = parseFloat(s.fx_rate) || 2.923;
+
+            let amtToApply = amt;
+            if (isIouUSD && !isWalletUSD) amtToApply = amt * fx;
+            else if (!isIouUSD && isWalletUSD) amtToApply = amt / fx;
+
+            if (type === 'payable') {
+                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) + amtToApply; // I borrowed, so my wallet grows
+            } else {
+                if ((parseFloat(s.vault[wallet]) || 0) < amtToApply) return alert("Insufficient funds in selected wallet.");
+                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) - amtToApply; // I lent, so my wallet shrinks
+            }
+        }
+
+        s.ious[type + "s"].push({ who: who, amt: amt, currency: cur, desc: desc });
+        saveState();
+        document.getElementById('iouModal').style.display = 'none';
+    }
+
+    function openResolveIOU(type, i) {
+        let iou = s.ious[type + "s"][i];
+        let cur = iou.currency || 'TND';
+        let amt = parseFloat(iou.amt) || 0;
+        
+        document.getElementById('resIouType').value = type;
+        document.getElementById('resIouIndex').value = i;
+        document.getElementById('resIouAffect').checked = false;
+        document.getElementById('resIouWalletSelect').style.display = 'none';
+        
+        let titleEl = document.getElementById('resIouTitle');
+        let msgEl = document.getElementById('resIouMsg');
+        let lblEl = document.getElementById('resIouWalletLabel');
+        let btnEl = document.getElementById('resIouSubmitBtn');
+        
+        if (type === 'payable') {
+            titleEl.innerText = "💸 Settle Payable";
+            titleEl.style.color = "var(--warning)";
+            msgEl.innerText = `You are paying back ${amt.toFixed(2)} ${cur} to ${iou.who}.`;
+            lblEl.innerText = "Deduct this payment from a wallet?";
+            btnEl.style.background = "var(--warning)";
+        } else {
+            titleEl.innerText = "📥 Collect Receivable";
+            titleEl.style.color = "var(--success)";
+            msgEl.innerText = `You are collecting ${amt.toFixed(2)} ${cur} from ${iou.who}.`;
+            lblEl.innerText = "Add these received funds to a wallet?";
+            btnEl.style.background = "var(--success)";
+        }
+        
+        document.getElementById('resolveIouModal').style.display = 'flex';
+    }
+
+    function confirmResolveIOU() {
+        let type = document.getElementById('resIouType').value;
+        let i = parseInt(document.getElementById('resIouIndex').value);
+        let affect = document.getElementById('resIouAffect').checked;
+        let wallet = document.getElementById('resIouWalletSelect').value;
+        
+        let iou = s.ious[type + "s"][i];
+        let amt = parseFloat(iou.amt) || 0;
+        let cur = iou.currency || 'TND';
+        
+        if (affect) {
+            let isWalletUSD = (wallet === 'cash_usd' || wallet === 'brightwell' || wallet === 'wise');
+            let isIouUSD = (cur === 'USD');
+            let fx = parseFloat(s.fx_rate) || 2.923;
+
+            let amtToApply = amt;
+            if (isIouUSD && !isWalletUSD) amtToApply = amt * fx;
+            else if (!isIouUSD && isWalletUSD) amtToApply = amt / fx;
+
+            if (type === 'payable') {
+                if ((parseFloat(s.vault[wallet]) || 0) < amtToApply) return alert("Insufficient funds to pay this debt.");
+                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) - amtToApply; // I paid it back, wallet shrinks
+            } else {
+                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) + amtToApply; // I got my money back, wallet grows
+            }
+        }
+        
+        s.ious[type + "s"].splice(i, 1);
+        saveState();
+        document.getElementById('resolveIouModal').style.display = 'none';
     }
 
     function updateLoanUI() {
