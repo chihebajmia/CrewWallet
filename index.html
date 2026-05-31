@@ -1629,61 +1629,24 @@
     };
 
     let s = null;
-    const DB_NAME = 'CrewWalletDB';
-    const STORE_NAME = 'stateStore';
+        const STORE_NAME = 'CrewWalletMaster';
 
-    function initDB() {
-        return new Promise((resolve, reject) => {
-            let request = indexedDB.open(DB_NAME, 1);
-            request.onupgradeneeded = (e) => {
-                let db = e.target.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME);
-                }
-            };
-            request.onsuccess = (e) => resolve(e.target.result);
-            request.onerror = (e) => reject(e.target.error);
-        });
-    }
-
-    async function loadState() {
-        try {
-            let db = await initDB();
-            let tx = db.transaction(STORE_NAME, 'readonly');
-            let store = tx.objectStore(STORE_NAME);
-            let request = store.get('master_data');
-            
-            request.onsuccess = () => {
-                if (request.result) { 
-                    // V38.2 FAIL-SAFE: Create the emergency backup before parsing
-                    secureV37Backup(request.result);
-                    s = JSON.parse(request.result); 
-                    migrateData(); 
-                } else {
-                    fallbackLoad();
-                }
-            };
-            request.onerror = fallbackLoad;
-        } catch (e) { 
-            fallbackLoad(); 
-        }
-    }
-
-    function fallbackLoad() {
-        let localData = localStorage.getItem('CrewWalletMaster');
+    function loadState() {
+        let localData = localStorage.getItem(STORE_NAME) || localStorage.getItem('CrewWallet_V37_Emergency_Backup');
         if (localData) {
             secureV37Backup(localData);
             try { 
                 s = JSON.parse(localData); 
             } catch(e) {
-                console.error("Local storage parsing failed");
+                s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
             }
+        } else {
+            s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
         }
         migrateData();
     }
 
     function secureV37Backup(rawString) {
-        // Only run this once to prevent overwriting the pure V37 backup with a V38 string later
         if (!localStorage.getItem('CrewWallet_V37_Emergency_Backup')) {
             localStorage.setItem('CrewWallet_V37_Emergency_Backup', rawString);
             showOptimizationBanner();
@@ -1701,6 +1664,7 @@
         }
     }
 
+
     // ==========================================
     // 2. THE DEEP-CLEAN MIGRATION PROTOCOL
     // ==========================================
@@ -1708,12 +1672,12 @@
     // ==========================================
     // 2. THE DEEP-CLEAN MIGRATION PROTOCOL
     // ==========================================
-    async function migrateData() {
+    function migrateData() {
         if (!s || !s.vault || !s.history) {
-            s = USER_PRISTINE_DATA;
+            s = JSON.parse(JSON.stringify(USER_PRISTINE_DATA));
         }
 
-        // 1. REPAIR LEGACY STRUCTURES (Loose Objects -> Nested Objects)
+        // 1. REPAIR LEGACY STRUCTURES
         if (!s.ious) s.ious = { payables: [], receivables: [] };
         if (s.payables) { s.ious.payables = s.payables; delete s.payables; }
         if (s.receivables) { s.ious.receivables = s.receivables; delete s.receivables; }
@@ -1723,7 +1687,7 @@
         if (s.missions) { s.projects.missions = s.missions; delete s.missions; }
         if (s.goals) { s.projects.goals = s.goals; delete s.goals; }
 
-        // 2. FIX V37 IOUS (Map 'name' -> 'who', 'amount' -> 'amt')
+        // 2. FIX V37 IOUS
         ['payables', 'receivables'].forEach(type => {
             (s.ious[type] || []).forEach(iou => {
                 if (iou.name !== undefined) { iou.who = iou.name; delete iou.name; }
@@ -1732,49 +1696,46 @@
             });
         });
 
-        // 3. FIX V37 INCOME (Map 'amount' -> 'amt', 'source' -> 'src', 'details' -> 'det')
+        // 3. FIX V37 INCOME
         if (!s.income_logs) s.income_logs = [];
         s.income_logs.forEach(inc => {
             if (inc.amount !== undefined) { inc.amt = inc.amount; delete inc.amount; }
             if (inc.source !== undefined) { inc.src = inc.source; delete inc.source; }
             if (inc.details !== undefined) { inc.det = inc.details; delete inc.details; }
             inc.amt = parseFloat(inc.amt) || 0;
+            if (!inc.src) inc.src = "Custom"; 
         });
 
-        // 4. FIX V37 EXPENSE LOGS & TIME MACHINE DATES
+        // 4. FIX V37 EXPENSE LOGS & FATAL "Web" TYPO
         ['vacation', 'onboard'].forEach(m => {
             if (s.history && s.history[m]) {
-                
-                // Helper to map old V37 Expense Keys
                 let mapExpenseKeys = (item) => {
                     if (item.tag !== undefined) { item.desc = item.tag; delete item.tag; }
                     if (item.name !== undefined) { item.desc = item.name; delete item.name; } 
                     if (item.cost !== undefined) { item.amount = item.cost; delete item.cost; }
                     if (item.walletSource !== undefined) { item.wallet = item.walletSource; delete item.walletSource; }
-                    
-                    // Generate a readable time string if it only has a raw timestamp (ts)
                     if (item.ts && !item.time) {
                         item.time = new Date(item.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     }
-                    
                     item.amount = parseFloat(item.amount) || 0;
                 };
 
-                // Repair Current Array
                 if (s.history[m].current && Array.isArray(s.history[m].current)) {
                     s.history[m].current.forEach(mapExpenseKeys);
                 } else {
                     s.history[m].current = [];
                 }
 
-                // Repair Archive Array & Time Machine Date format
                 if (s.history[m].archive && Array.isArray(s.history[m].archive)) {
                     s.history[m].archive.forEach(day => {
                         day.surplus = parseFloat(day.surplus) || 0;
                         day.limit = parseFloat(day.limit) || 0;
                         
-                        // TIME MACHINE FIX: Convert "Tue May 19 2026" to "5/19/2026" (Locale Standard)
-                        // This allows the HTML5 calendar picker to match dates perfectly.
+                        // FATAL CRASH FIX: Replace "Web" with "Wed"
+                        if (day.date && typeof day.date === 'string') {
+                            day.date = day.date.replace("Web ", "Wed ");
+                        }
+
                         if (day.date && isNaN(Date.parse(day.date)) === false && day.date.includes(" ")) {
                             day.date = new Date(day.date).toLocaleDateString();
                         }
@@ -1816,7 +1777,7 @@
         s.vault.ibkr_cash = parseFloat(s.vault.ibkr_cash) || parseFloat(s.vault.ibkr) || 0;
         s.vault.ibkr_shares = parseFloat(s.vault.ibkr_shares) || 0;
         s.vault.ibkr_cost = parseFloat(s.vault.ibkr_cost) || 0;
-        s.vault.ibkr_price = parseFloat(s.vault.ibkr_price) || 805.79;
+        s.vault.ibkr_price = parseFloat(s.vault.ibkr_price) || 816.52; 
         
         ['cash_tnd', 'cash_usd', 'savings', 'wise', 'brightwell'].forEach(k => {
             s.vault[k] = parseFloat(s.vault[k]) || 0;
@@ -1833,13 +1794,19 @@
              s.loan.overdraft = 516.00;
         }
 
-        // 8. REPAIR PROJECT TYPES & FLAGS
+        // 8. REPAIR PROJECT TYPES & FLAGS (TARGET VS LIMIT FIX)
         Object.keys(s.projects.envelopes).forEach(k => { 
             let e = s.projects.envelopes[k];
             if (e.archived === undefined) e.archived = false; 
             if (e.bypass === undefined) e.bypass = true;
             if (!e.currency) e.currency = 'TND';
-            e.target = parseFloat(e.target) || 0;
+            
+            if ((!e.target || e.target === 0) && e.limit) {
+                e.target = parseFloat(e.limit);
+            } else {
+                e.target = parseFloat(e.target) || 0;
+            }
+            delete e.limit;
             e.spent = parseFloat(e.spent) || 0;
         });
         
@@ -1848,7 +1815,13 @@
             if (m.archived === undefined) m.archived = false; 
             if (m.bypass === undefined) m.bypass = false;
             if (!m.currency) m.currency = 'TND';
-            m.target = parseFloat(m.target) || 0;
+            
+            if ((!m.target || m.target === 0) && m.limit) {
+                m.target = parseFloat(m.limit);
+            } else {
+                m.target = parseFloat(m.target) || 0;
+            }
+            delete m.limit;
             m.spent = parseFloat(m.spent) || 0;
         });
         
@@ -1878,7 +1851,6 @@
             s.loan.arrears += interestToApply;
             s.loan.last_interest_ts = now;
         } else if (daysPassed < 0) {
-            // Time machine correction
             s.loan.last_interest_ts = now; 
         }
     }
@@ -1906,25 +1878,17 @@
             }
         });
         
-        if (shifted) forceSaveState();
+        if (shifted) saveState(true);
     }
 
-    async function forceSaveState() {
-        let dataStr = JSON.stringify(s);
-        localStorage.setItem('CrewWalletMaster', dataStr); 
+    function saveState(bypassRender = false) {
         try {
-            let db = await initDB();
-            let tx = db.transaction(STORE_NAME, 'readwrite');
-            let store = tx.objectStore(STORE_NAME);
-            store.put(dataStr, 'master_data');
-        } catch (e) { 
-            console.error("IndexedDB save failed"); 
+            localStorage.setItem(STORE_NAME, JSON.stringify(s));
+            if (!bypassRender) renderApp();
+        } catch (e) {
+            console.error("Local storage save failed");
+            alert("iOS Storage Error: Unable to save. Try closing Safari tabs or clearing cache.");
         }
-    }
-
-    async function saveState() {
-        await forceSaveState();
-        renderApp(); 
     }
 
     // ==========================================
