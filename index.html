@@ -1418,28 +1418,71 @@
         if (typeof masterRender === "function") masterRender();
     }
 
-    function sanitizeAndUpgradeData(oldData) {
-        // Deep clone to prevent reference mutations
-        let d = JSON.parse(JSON.stringify(oldData));
+        function sanitizeAndUpgradeData(oldData) {
+        let d = JSON.parse(JSON.stringify(oldData)); // Deep copy
 
-        // 2.1 BASE VAULT & INFRASTRUCTURE GUARANTEES
+        // 1. BASE VAULT GUARANTEES
         if (!d.vault) d.vault = {};
-        d.vault.cash_tnd = d.vault.cash_tnd || 0;
-        d.vault.cash_usd = d.vault.cash_usd || 0;
-        d.vault.brightwell = d.vault.brightwell || 0;
-        d.vault.wise = d.vault.wise || 0;
-        d.vault.savings = d.vault.savings || 0;
-        d.vault.ibkr_cash = d.vault.ibkr_cash || 0;
-        d.vault.lifetime_fees = d.vault.lifetime_fees || 0;
+        d.vault.cash_tnd = parseFloat(d.vault.cash_tnd) || 0;
+        d.vault.cash_usd = parseFloat(d.vault.cash_usd) || 0;
+        d.vault.brightwell = parseFloat(d.vault.brightwell) || 0;
+        d.vault.wise = parseFloat(d.vault.wise) || 0;
+        d.vault.savings = parseFloat(d.vault.savings) || 0;
+        d.vault.ibkr_cash = parseFloat(d.vault.ibkr_cash) || 0;
+        d.vault.lifetime_fees = parseFloat(d.vault.lifetime_fees) || 0;
 
-        // 2.2 IBKR MULTI-ASSET PORTFOLIO UPGRADE
-        // If legacy shares exist but the new portfolio array doesn't, migrate them.
+        // 2. SETTINGS & DATES MAPPING (Fixes Timeline & FX Math)
+        if (!d.settings) d.settings = {};
+        d.settings.activeMode = d.mode || d.settings.activeMode || 'vacation';
+        d.settings.fx_rate = parseFloat(d.fx_rate) || parseFloat(d.settings.fx_rate) || 2.923;
+        d.settings.waterfallTarget = parseFloat(d.settings.vacationFundTarget) || 2557;
+        
+        // Map old date formats to new variables
+        d.settings.vacStart = d.settings.vacationStart || d.settings.vacStart || '';
+        d.settings.vacEnd = d.settings.vacationEnd || d.settings.vacEnd || '';
+        d.settings.conStart = d.settings.contractStart || d.settings.conStart || '';
+        d.settings.conEnd = d.settings.contractEnd || d.settings.conEnd || '';
+
+        // 3. VAPE COMMAND CENTER (Fixes predictive math crash)
+        if (!d.vape_stash) d.vape_stash = {};
+        d.vape_stash.count = parseInt(d.vape_stash.count) || 0;
+        d.vape_stash.total_units = parseInt(d.vape_stash.total_units) || d.vape_stash.count || 1;
+        d.vape_stash.total_spent = parseFloat(d.vape_stash.total_spent) || (d.vape_stash.total_units * 35);
+        d.vape_stash.avg_cost = parseFloat(d.vape_stash.avg_cost) || 35;
+        d.vape_stash.launch_timestamp = d.vape_stash.launch_timestamp || Date.now();
+
+        // 4. HISTORY LOG RE-MAPPING (Fixes Render Crash & Phantom Wallets)
+        if (!d.history) d.history = {};
+        ['vacation', 'onboard'].forEach(mode => {
+            if (!d.history[mode]) d.history[mode] = { current: [], archive: [], limit: (mode==='vacation'?35:7.25), balance: 0 };
+            
+            const physicalTarget = (mode === 'vacation') ? 'cash_tnd' : 'cash_usd';
+            
+            const fixLog = (log) => {
+                // Map legacy category variable
+                if (log.category) { log.cat = log.category; delete log.category; }
+                if (!log.cat) log.cat = 'misc';
+                if (!log.desc) log.desc = 'Expense';
+                
+                // Map legacy phantom wallets
+                if (!log.wallet || log.wallet === 'default' || log.wallet === 'none') {
+                    log.wallet = physicalTarget;
+                }
+            };
+
+            (d.history[mode].current || []).forEach(fixLog);
+            (d.history[mode].archive || []).forEach(day => {
+                (day.logs || []).forEach(fixLog);
+            });
+        });
+
+        // 5. IBKR PORTFOLIO UPGRADE
         if (!d.ibkr_portfolio) {
             d.ibkr_portfolio = [];
-            if (d.vault.ibkr_shares > 0) {
+            if (parseFloat(d.vault.ibkr_shares) > 0) {
                 d.ibkr_portfolio.push({
-                    symbol: 'CSPX.AS', // Default assumption for your legacy ETF
-                    qty: parseFloat(d.vault.ibkr_shares) || 0,
+                    symbol: 'CSPX.AS',
+                    qty: parseFloat(d.vault.ibkr_shares),
                     cost: parseFloat(d.vault.ibkr_cost) || 0,
                     price: parseFloat(d.vault.ibkr_price) || 816.52,
                     div_type: 'accumulating',
@@ -1447,70 +1490,23 @@
                 });
             }
         }
-        // Cleanup legacy flat variables to prevent database bloat
-        delete d.vault.ibkr_shares;
-        delete d.vault.ibkr_cost;
-        delete d.vault.ibkr_price;
+        delete d.vault.ibkr_shares; delete d.vault.ibkr_cost; delete d.vault.ibkr_price;
 
-        // 2.3 HISTORY & "PHANTOM WALLET" BUG FIX
-        if (!d.history) d.history = {};
-        ['vacation', 'onboard'].forEach(mode => {
-            if (!d.history[mode]) {
-                d.history[mode] = { current: [], archive: [], limit: (mode==='vacation'? 35 : 7.25), balance: (mode==='vacation'? 35 : 7.25) };
-            }
-            
-            const physicalTarget = (mode === 'vacation') ? 'cash_tnd' : 'cash_usd';
-            
-            // Fix Current Array
-            (d.history[mode].current || []).forEach(log => {
-                if (log.wallet === 'default' || !log.wallet || log.wallet === 'none') {
-                    log.wallet = physicalTarget;
-                }
-            });
-
-            // Fix Archive Array
-            (d.history[mode].archive || []).forEach(day => {
-                (day.logs || []).forEach(log => {
-                    if (log.wallet === 'default' || !log.wallet || log.wallet === 'none') {
-                        log.wallet = physicalTarget;
-                    }
-                });
-            });
-        });
-
-        // 2.4 VAPE COMMAND CENTER ARCHITECTURE
-        if (!d.vape_stash) d.vape_stash = { count: 0, logs: [], avg_cost: 0, total_spent: 0, total_units: 0, launch_timestamp: Date.now() };
-
-        // 2.5 STB DEBT MATRIX GUARANTEES
+        // 6. DEBT MATRIX & OTHERS
         if (!d.loan) d.loan = {};
-        d.loan.arrears = d.loan.arrears || 0;
-        d.loan.overdraft = d.loan.overdraft || 0;
-        d.loan.rate = d.loan.rate || 13.5;
+        d.loan.arrears = parseFloat(d.loan.arrears) || 0;
+        d.loan.overdraft = parseFloat(d.loan.overdraft) || 0;
+        d.loan.rate = parseFloat(d.loan.rate) || 13.5;
         d.loan.schedule = d.loan.schedule || [];
-        d.loan.last_interest_ts = d.loan.last_interest_ts || Date.now();
-
-        // 2.6 IOU & INCOME LOGS
+        
         if (!d.ious) d.ious = { payables: [], receivables: [] };
         if (!d.income_logs) d.income_logs = [];
-
-        // 2.7 SETTINGS & TRACKERS
-        if (!d.settings) d.settings = { 
-            activeMode: 'vacation', 
-            fx_rate: 2.923, 
-            waterfallTarget: 2557,
-            vacationStart: '', vacationEnd: '', conStart: '', conEnd: ''
-        };
-        
-        // Migrate old mode variable into settings if it exists outside
-        if (d.mode) { d.settings.activeMode = d.mode; delete d.mode; }
-        
-        if (!d.projects) d.projects = { envelopes: {}, missions: {}, goals: [] };
-
-        // 2.8 PIPELINE FEE LEDGER (NEW)
         if (!d.pipeline_logs) d.pipeline_logs = [];
+        if (!d.projects) d.projects = { envelopes: {}, missions: {}, goals: [] };
 
         return d;
     }
+
 
     function generatePristineState() {
         return sanitizeAndUpgradeData({}); // Passing empty object builds the skeleton automatically
