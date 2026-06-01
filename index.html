@@ -2762,14 +2762,18 @@
             s.history[s.mode].balance -= spillover;
         }
 
-        // Apply deduction to Source Wallet
-        if (wallet !== 'default') {
-            let dAmt = (!isNaN(actualDeduct) && actualDeduct > 0) ? actualDeduct : totalProjCost;
-            if (wallet === 'cash_tnd') s.vault.cash_tnd = (parseFloat(s.vault.cash_tnd) || 0) - dAmt;
-            if (wallet === 'brightwell') s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) - dAmt;
-            if (wallet === 'wise') s.vault.wise = (parseFloat(s.vault.wise) || 0) - dAmt;
-            if (wallet === 'savings') s.vault.savings = (parseFloat(s.vault.savings) || 0) - dAmt;
+        // Apply deduction to Source Wallet (BUG FIXED HERE)
+        let targetWallet = wallet;
+        if (targetWallet === 'default') {
+            targetWallet = (s.mode === 'vacation') ? 'cash_tnd' : 'cash_usd';
         }
+
+        let dAmt = (!isNaN(actualDeduct) && actualDeduct > 0) ? actualDeduct : totalProjCost;
+        if (targetWallet === 'cash_tnd') s.vault.cash_tnd = (parseFloat(s.vault.cash_tnd) || 0) - dAmt;
+        if (targetWallet === 'cash_usd') s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) - dAmt;
+        if (targetWallet === 'brightwell') s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) - dAmt;
+        if (targetWallet === 'wise') s.vault.wise = (parseFloat(s.vault.wise) || 0) - dAmt;
+        if (targetWallet === 'savings') s.vault.savings = (parseFloat(s.vault.savings) || 0) - dAmt;
 
         s.history[s.mode].current.unshift({ 
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
@@ -2781,7 +2785,7 @@
             spillover: spillover, 
             shipping: ship, 
             tax: tax, 
-            wallet: wallet, 
+            wallet: targetWallet, // Saves the actual wallet so refunds work later!
             actualDeduct: actualDeduct, 
             location: loc, 
             items: items, 
@@ -3710,25 +3714,52 @@
         if (src === 'current') { 
             let item = s.history[s.mode].current[i]; 
             
-            // AUDIT FIX: Restore balance or refund spillover
+            // Restore daily balance or refund spillover
             if (!item.bypassLimit) {
                 s.history[s.mode].balance = (parseFloat(s.history[s.mode].balance) || 0) + (parseFloat(item.amount) || 0); 
             } else if (parseFloat(item.spillover) > 0) {
                 s.history[s.mode].balance = (parseFloat(s.history[s.mode].balance) || 0) + parseFloat(item.spillover);
             }
+
+            // Refund the physical vault (BUG FIXED HERE)
+            let refundWallet = item.wallet;
+            if (!refundWallet || refundWallet === 'default') {
+                refundWallet = (s.mode === 'vacation') ? 'cash_tnd' : 'cash_usd';
+            }
+            let refundAmt = (!isNaN(item.actualDeduct) && item.actualDeduct > 0) ? item.actualDeduct : ((parseFloat(item.amount)||0) + (parseFloat(item.shipping)||0) + (parseFloat(item.tax)||0));
+            
+            if (refundWallet === 'cash_tnd') s.vault.cash_tnd = (parseFloat(s.vault.cash_tnd) || 0) + refundAmt;
+            if (refundWallet === 'cash_usd') s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) + refundAmt;
+            if (refundWallet === 'brightwell') s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + refundAmt;
+            if (refundWallet === 'wise') s.vault.wise = (parseFloat(s.vault.wise) || 0) + refundAmt;
+            if (refundWallet === 'savings') s.vault.savings = (parseFloat(s.vault.savings) || 0) + refundAmt;
             
             s.history[s.mode].current.splice(i, 1); 
         } else { 
-            let amt = parseFloat(tmCurrentDayObj.logs[i].amount) || 0;
+            let item = tmCurrentDayObj.logs[i];
+            let amt = parseFloat(item.amount) || 0;
             tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + amt; 
+            
+            // Refund the physical vault for historical deletion
+            let refundWallet = item.wallet;
+            if (!refundWallet || refundWallet === 'default') {
+                refundWallet = (s.mode === 'vacation') ? 'cash_tnd' : 'cash_usd';
+            }
+            let refundAmt = (!isNaN(item.actualDeduct) && item.actualDeduct > 0) ? item.actualDeduct : ((parseFloat(item.amount)||0) + (parseFloat(item.shipping)||0) + (parseFloat(item.tax)||0));
+
+            if (refundWallet === 'cash_tnd') s.vault.cash_tnd = (parseFloat(s.vault.cash_tnd) || 0) + refundAmt;
+            if (refundWallet === 'cash_usd') s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) + refundAmt;
+            if (refundWallet === 'brightwell') s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + refundAmt;
+            if (refundWallet === 'wise') s.vault.wise = (parseFloat(s.vault.wise) || 0) + refundAmt;
+            if (refundWallet === 'savings') s.vault.savings = (parseFloat(s.vault.savings) || 0) + refundAmt;
+
             tmCurrentDayObj.logs.splice(i, 1); 
         }
         
         saveState(); 
         if (src !== 'current') loadPastDay();
     }
-
-
+    
     function searchLogs() {
         let q = document.getElementById('tmSearch').value.toLowerCase(); 
         let resBox = document.getElementById('tmSearchResults'); 
