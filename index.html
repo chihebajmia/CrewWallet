@@ -3643,8 +3643,10 @@
             }); 
         }
         
-        document.getElementById('tmList').innerHTML = h || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No records.</div>';
-        document.getElementById('btnToggleTMForm').style.display = arch ? 'block' : 'none'; 
+        document.getElementById('tmList').innerHTML = h || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No expenses logged for this date.</div>';
+        
+        // BUG FIX: Always show the "Log Past Expense" button if a date is selected, even if it's empty!
+        document.getElementById('btnToggleTMForm').style.display = 'block'; 
         document.getElementById('tmFormContainer').style.display = 'none';
     }
     
@@ -3663,6 +3665,7 @@
         document.getElementById('tmLocation').value = item.location || '';
         document.getElementById('tmProject').value = item.project || 'none'; 
         document.getElementById('tmSourceWallet').value = item.wallet || 'default';
+        document.getElementById('tmActualDeduct').value = item.actualDeduct || '';
         
         document.getElementById('tmEditBanner').style.display = 'block'; 
         document.getElementById('tmFormContainer').style.display = 'block';
@@ -3673,16 +3676,20 @@
         document.getElementById('tmEditBanner').style.display = 'none'; 
         document.getElementById('tmTag').value = ''; 
         document.getElementById('tmAmount').value = ''; 
+        document.getElementById('tmActualDeduct').value = '';
+        document.getElementById('tmShipping').value = '';
+        document.getElementById('tmTax').value = '';
     }
     
     function logPastExpense() {
-        if (!tmCurrentDayObj) return;
-        
         let desc = document.getElementById('tmTag').value; 
         let amt = parseFloat(document.getElementById('tmAmount').value);
         let cat = document.getElementById('tmCategory').value; 
         let proj = document.getElementById('tmProject').value; 
         let wallet = document.getElementById('tmSourceWallet').value;
+        let actualDeduct = parseFloat(document.getElementById('tmActualDeduct').value);
+        let ship = parseFloat(document.getElementById('tmShipping').value) || 0;
+        let tax = parseFloat(document.getElementById('tmTax').value) || 0;
         
         if (!desc || isNaN(amt) || amt <= 0) return;
         
@@ -3693,24 +3700,71 @@
             category: cat, 
             project: proj, 
             wallet: wallet, 
+            actualDeduct: actualDeduct,
+            shipping: ship,
+            tax: tax,
             location: document.getElementById('tmLocation').value 
         };
         
-        if (tmEditIndex > -1) { 
-            let oldAmt = parseFloat(tmCurrentDayObj.logs[tmEditIndex].amount) || 0; 
+        let surplusImpact = 0;
+        let oldItem = null;
+
+        if (tmEditIndex > -1 && tmCurrentDayObj) { 
+            oldItem = tmCurrentDayObj.logs[tmEditIndex];
+            let oldAmt = parseFloat(oldItem.amount) || 0; 
             tmCurrentDayObj.logs[tmEditIndex] = newItem; 
-            tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + (oldAmt - amt); 
+            surplusImpact = oldAmt - amt; 
+            tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact; 
         } else { 
-            tmCurrentDayObj.logs.unshift(newItem); 
-            tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) - amt; 
+            if (!tmCurrentDayObj) {
+                // CREATE A NEW DAY IN THE ARCHIVE
+                let dStr = new Date(document.getElementById('tmDate').value).toLocaleDateString();
+                let lim = parseFloat(s.history[s.mode].limit) || 0;
+                tmCurrentDayObj = {
+                    date: dStr,
+                    logs: [newItem],
+                    limit: lim,
+                    surplus: lim - amt
+                };
+                s.history[s.mode].archive.push(tmCurrentDayObj);
+                s.history[s.mode].archive.sort((a,b) => new Date(a.date) - new Date(b.date));
+                // Impact is the total initial saved capital (Limit - Amount)
+                surplusImpact = tmCurrentDayObj.surplus;
+            } else {
+                // Append to existing day
+                tmCurrentDayObj.logs.unshift(newItem); 
+                surplusImpact = -amt; 
+                tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact; 
+            }
         }
         
+        // --- SYNCHRONIZE GLOBAL CAPITAL SAVED ---
+        let fx = parseFloat(s.fx_rate) || 2.923;
+        if (s.mode === 'vacation') {
+            s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + surplusImpact;
+        } else {
+            s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + (surplusImpact * fx);
+        }
+
+        // --- SYNCHRONIZE PHYSICAL VAULT ---
+        let targetWallet = wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : wallet;
+        let deductAmt = (!isNaN(actualDeduct) && actualDeduct > 0) ? actualDeduct : (amt + ship + tax);
+
+        if (oldItem) {
+            let oldWallet = oldItem.wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : oldItem.wallet;
+            let oldDeduct = (!isNaN(oldItem.actualDeduct) && oldItem.actualDeduct > 0) ? oldItem.actualDeduct : ((parseFloat(oldItem.amount)||0) + (parseFloat(oldItem.shipping)||0) + (parseFloat(oldItem.tax)||0));
+            if (s.vault[oldWallet] !== undefined) s.vault[oldWallet] += oldDeduct; // Refund old
+        }
+        if (s.vault[targetWallet] !== undefined) s.vault[targetWallet] -= deductAmt; // Deduct new
+
         saveState(); 
         cancelTMEdit(); 
         loadPastDay();
     }
     
     function deleteExpense(i, src) {
+        let surplusImpact = 0;
+
         if (src === 'current') { 
             let item = s.history[s.mode].current[i]; 
             
@@ -3721,24 +3775,31 @@
                 s.history[s.mode].balance = (parseFloat(s.history[s.mode].balance) || 0) + parseFloat(item.spillover);
             }
 
-            // Refund the physical vault (BUG FIXED HERE)
+            // Refund the physical vault
             let refundWallet = item.wallet;
             if (!refundWallet || refundWallet === 'default') {
                 refundWallet = (s.mode === 'vacation') ? 'cash_tnd' : 'cash_usd';
             }
             let refundAmt = (!isNaN(item.actualDeduct) && item.actualDeduct > 0) ? item.actualDeduct : ((parseFloat(item.amount)||0) + (parseFloat(item.shipping)||0) + (parseFloat(item.tax)||0));
             
-            if (refundWallet === 'cash_tnd') s.vault.cash_tnd = (parseFloat(s.vault.cash_tnd) || 0) + refundAmt;
-            if (refundWallet === 'cash_usd') s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) + refundAmt;
-            if (refundWallet === 'brightwell') s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + refundAmt;
-            if (refundWallet === 'wise') s.vault.wise = (parseFloat(s.vault.wise) || 0) + refundAmt;
-            if (refundWallet === 'savings') s.vault.savings = (parseFloat(s.vault.savings) || 0) + refundAmt;
-            
+            if (s.vault[refundWallet] !== undefined) s.vault[refundWallet] += refundAmt;
             s.history[s.mode].current.splice(i, 1); 
+
         } else { 
             let item = tmCurrentDayObj.logs[i];
             let amt = parseFloat(item.amount) || 0;
+            
+            // Increase the day's local surplus
             tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + amt; 
+            surplusImpact = amt;
+
+            // --- SYNCHRONIZE GLOBAL CAPITAL SAVED ---
+            let fx = parseFloat(s.fx_rate) || 2.923;
+            if (s.mode === 'vacation') {
+                s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + surplusImpact;
+            } else {
+                s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + (surplusImpact * fx);
+            }
             
             // Refund the physical vault for historical deletion
             let refundWallet = item.wallet;
@@ -3747,19 +3808,15 @@
             }
             let refundAmt = (!isNaN(item.actualDeduct) && item.actualDeduct > 0) ? item.actualDeduct : ((parseFloat(item.amount)||0) + (parseFloat(item.shipping)||0) + (parseFloat(item.tax)||0));
 
-            if (refundWallet === 'cash_tnd') s.vault.cash_tnd = (parseFloat(s.vault.cash_tnd) || 0) + refundAmt;
-            if (refundWallet === 'cash_usd') s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) + refundAmt;
-            if (refundWallet === 'brightwell') s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + refundAmt;
-            if (refundWallet === 'wise') s.vault.wise = (parseFloat(s.vault.wise) || 0) + refundAmt;
-            if (refundWallet === 'savings') s.vault.savings = (parseFloat(s.vault.savings) || 0) + refundAmt;
-
+            if (s.vault[refundWallet] !== undefined) s.vault[refundWallet] += refundAmt;
+            
             tmCurrentDayObj.logs.splice(i, 1); 
         }
         
         saveState(); 
         if (src !== 'current') loadPastDay();
     }
-    
+
     function searchLogs() {
         let q = document.getElementById('tmSearch').value.toLowerCase(); 
         let resBox = document.getElementById('tmSearchResults'); 
