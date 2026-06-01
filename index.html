@@ -3002,9 +3002,9 @@
     // D. Deep Reversal Overwrite: Adding the Delete Button to Historical Logs
     // We override the listener established in Chunk 6 to include the reversal logic
     document.getElementById('input-time-target-date').addEventListener('change', (e) => {
-        const dRaw = e.target.value; 
-        if(!dRaw) return;
-        const dStr = new Date(dRaw).toLocaleDateString('en-GB'); 
+        const dStr = e.target.value; // Natively reads as YYYY-MM-DD
+        if(!dStr) return;
+        
         const list = document.getElementById('list-time-historical-day-logs');
         list.innerHTML = '';
         
@@ -3018,7 +3018,7 @@
                         <div class="stream-card">
                             <div>
                                 <strong style="font-size:13px;">${log.desc}</strong>
-                                <div style="font-size:10px; color:var(--text-muted);">${log.time || '--:--'} • ${log.cat} • ${log.wallet}</div>
+                                <div style="font-size:10px; color:var(--text-muted);">${log.time || '--:--'} • ${log.cat.toUpperCase()} • ${log.wallet.replace('_', ' ').toUpperCase()}</div>
                             </div>
                             <div style="display:flex; align-items:center; gap:12px;">
                                 <strong style="font-size:14px; color:var(--danger);">-${formatMoney(log.amount)}</strong>
