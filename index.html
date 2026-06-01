@@ -1418,10 +1418,10 @@
         if (typeof masterRender === "function") masterRender();
     }
 
-        function sanitizeAndUpgradeData(oldData) {
-        let d = JSON.parse(JSON.stringify(oldData)); // Deep copy
+    function sanitizeAndUpgradeData(oldData) {
+        let d = JSON.parse(JSON.stringify(oldData)); 
 
-        // 1. BASE VAULT GUARANTEES
+        // 1. BASE VAULT
         if (!d.vault) d.vault = {};
         d.vault.cash_tnd = parseFloat(d.vault.cash_tnd) || 0;
         d.vault.cash_usd = parseFloat(d.vault.cash_usd) || 0;
@@ -1431,82 +1431,101 @@
         d.vault.ibkr_cash = parseFloat(d.vault.ibkr_cash) || 0;
         d.vault.lifetime_fees = parseFloat(d.vault.lifetime_fees) || 0;
 
-        // 2. SETTINGS & DATES MAPPING (Fixes Timeline & FX Math)
+        // 2. SETTINGS & TIMELINE MAPPING
         if (!d.settings) d.settings = {};
         d.settings.activeMode = d.mode || d.settings.activeMode || 'vacation';
         d.settings.fx_rate = parseFloat(d.fx_rate) || parseFloat(d.settings.fx_rate) || 2.923;
         d.settings.waterfallTarget = parseFloat(d.settings.vacationFundTarget) || 2557;
         
-        // Map old date formats to new variables
-        d.settings.vacStart = d.settings.vacationStart || d.settings.vacStart || '';
-        d.settings.vacEnd = d.settings.vacationEnd || d.settings.vacEnd || '';
-        d.settings.conStart = d.settings.contractStart || d.settings.conStart || '';
-        d.settings.conEnd = d.settings.contractEnd || d.settings.conEnd || '';
+        d.settings.vacStart = d.settings.vacStart || d.settings.vacationStart || (oldData.settings ? oldData.settings.vacationStart : '');
+        d.settings.vacEnd = d.settings.vacEnd || d.settings.vacationEnd || (oldData.settings ? oldData.settings.vacationEnd : '');
+        d.settings.conStart = d.settings.conStart || d.settings.contractStart || (oldData.settings ? oldData.settings.contractStart : '');
+        d.settings.conEnd = d.settings.conEnd || d.settings.contractEnd || (oldData.settings ? oldData.settings.contractEnd : '');
 
-        // 3. VAPE COMMAND CENTER (Fixes predictive math crash)
-        if (!d.vape_stash) d.vape_stash = {};
-        d.vape_stash.count = parseInt(d.vape_stash.count) || 0;
-        d.vape_stash.total_units = parseInt(d.vape_stash.total_units) || d.vape_stash.count || 1;
-        d.vape_stash.total_spent = parseFloat(d.vape_stash.total_spent) || (d.vape_stash.total_units * 35);
-        d.vape_stash.avg_cost = parseFloat(d.vape_stash.avg_cost) || 35;
-        d.vape_stash.launch_timestamp = d.vape_stash.launch_timestamp || Date.now();
+        // 3. IOU TRANSLATOR
+        if (!d.ious) d.ious = { payables: [], receivables: [] };
+        ['payables', 'receivables'].forEach(type => {
+            (d.ious[type] || []).forEach(iou => {
+                if (iou.who !== undefined) { iou.agent = iou.who; delete iou.who; }
+                if (iou.amt !== undefined) { iou.amount = iou.amt; delete iou.amt; }
+                if (!iou.agent) iou.agent = "Unknown";
+            });
+        });
 
-        // 4. HISTORY LOG RE-MAPPING (Fixes Render Crash & Phantom Wallets)
+        // 4. TIME MACHINE DATE FIXER
+        const formatStrictDate = (dateStr) => {
+            if (!dateStr) return new Date().toISOString().split('T')[0];
+            let p = new Date(dateStr);
+            return isNaN(p) ? dateStr : p.toISOString().split('T')[0];
+        };
+
+        // 5. HISTORY & VAPE CRAWLER
+        let realVapeUnits = 0; let realVapeSpend = 0; let earliestVapeTs = Date.now();
         if (!d.history) d.history = {};
+        
         ['vacation', 'onboard'].forEach(mode => {
             if (!d.history[mode]) d.history[mode] = { current: [], archive: [], limit: (mode==='vacation'?35:7.25), balance: 0 };
-            
             const physicalTarget = (mode === 'vacation') ? 'cash_tnd' : 'cash_usd';
             
             const fixLog = (log) => {
-                // Map legacy category variable
                 if (log.category) { log.cat = log.category; delete log.category; }
+                if (log.name) { log.desc = log.name; delete log.name; } 
                 if (!log.cat) log.cat = 'misc';
                 if (!log.desc) log.desc = 'Expense';
-                
-                // Map legacy phantom wallets
-                if (!log.wallet || log.wallet === 'default' || log.wallet === 'none') {
-                    log.wallet = physicalTarget;
+                if (!log.wallet || log.wallet === 'default' || log.wallet === 'none') log.wallet = physicalTarget;
+
+                if (log.cat === '💨 Vape' || log.cat === 'vape') {
+                    log.cat = 'vape';
+                    let q = parseInt(log.vapeQty) || 1;
+                    realVapeUnits += q;
+                    realVapeSpend += parseFloat(log.amount) || 0;
+                    let ts = log.ts ? log.ts : (log.dateStr ? new Date(log.dateStr).getTime() : Date.now());
+                    if (ts < earliestVapeTs) earliestVapeTs = ts;
                 }
             };
-
             (d.history[mode].current || []).forEach(fixLog);
             (d.history[mode].archive || []).forEach(day => {
+                day.date = formatStrictDate(day.date);
                 (day.logs || []).forEach(fixLog);
             });
         });
 
-        // 5. IBKR PORTFOLIO UPGRADE
+        // 6. VAPE COMMAND CENTER REBUILD
+        if (!d.vape_stash) d.vape_stash = {};
+        d.vape_stash.count = parseInt(d.vape_stash.count) || 0;
+        d.vape_stash.total_units = realVapeUnits > 0 ? realVapeUnits : 1;
+        d.vape_stash.total_spent = realVapeSpend > 0 ? realVapeSpend : 35;
+        d.vape_stash.avg_cost = d.vape_stash.total_spent / d.vape_stash.total_units;
+        d.vape_stash.launch_timestamp = earliestVapeTs;
+
+        // 7. IBKR & CAPITAL SAVED
         if (!d.ibkr_portfolio) {
             d.ibkr_portfolio = [];
-            if (parseFloat(d.vault.ibkr_shares) > 0) {
+            if (d.vault.ibkr_shares !== undefined && parseFloat(d.vault.ibkr_shares) > 0) {
                 d.ibkr_portfolio.push({
-                    symbol: 'CSPX.AS',
-                    qty: parseFloat(d.vault.ibkr_shares),
-                    cost: parseFloat(d.vault.ibkr_cost) || 0,
-                    price: parseFloat(d.vault.ibkr_price) || 816.52,
-                    div_type: 'accumulating',
-                    ghost_yield: 0
+                    symbol: 'CSPX.AS', qty: parseFloat(d.vault.ibkr_shares),
+                    cost: parseFloat(d.vault.ibkr_cost) || 0, price: parseFloat(d.vault.ibkr_price) || 816.52,
+                    div_type: 'accumulating', ghost_yield: 0
                 });
             }
         }
         delete d.vault.ibkr_shares; delete d.vault.ibkr_cost; delete d.vault.ibkr_price;
 
-        // 6. DEBT MATRIX & OTHERS
+        d.capital_saved_tnd = parseFloat(d.capital_saved_tnd) || (oldData.capital_saved_tnd ? parseFloat(oldData.capital_saved_tnd) : 0);
+        d.capital_saved_usd = parseFloat(d.capital_saved_usd) || 0;
+
         if (!d.loan) d.loan = {};
         d.loan.arrears = parseFloat(d.loan.arrears) || 0;
         d.loan.overdraft = parseFloat(d.loan.overdraft) || 0;
         d.loan.rate = parseFloat(d.loan.rate) || 13.5;
         d.loan.schedule = d.loan.schedule || [];
         
-        if (!d.ious) d.ious = { payables: [], receivables: [] };
         if (!d.income_logs) d.income_logs = [];
         if (!d.pipeline_logs) d.pipeline_logs = [];
         if (!d.projects) d.projects = { envelopes: {}, missions: {}, goals: [] };
 
         return d;
     }
-
 
     function generatePristineState() {
         return sanitizeAndUpgradeData({}); // Passing empty object builds the skeleton automatically
@@ -2110,12 +2129,9 @@
         const mode = s.settings.activeMode;
         const fx = parseFloat(s.settings.fx_rate) || 2.923;
 
-        // A. Capital Saved (Historical Recalculation + Gross)
-        let tndSaved = 0; let usdSaved = 0;
-        (s.history.vacation.archive || []).forEach(d => tndSaved += (parseFloat(d.surplus)||0));
-        (s.history.onboard.archive || []).forEach(d => usdSaved += (parseFloat(d.surplus)||0));
-        let totalSaved = mode === 'vacation' ? (tndSaved + (usdSaved * fx)) : (usdSaved + (tndSaved / fx));
-        document.getElementById('lbl-saved-numeric').innerText = `${formatMoney(totalSaved)} ${mode === 'vacation' ? 'TND' : '$'}`;
+        // A. Capital Saved (Fixed: Reads directly from secure baseline variable)
+        let cap = mode === 'vacation' ? s.capital_saved_tnd : (s.capital_saved_tnd / fx);
+        document.getElementById('lbl-saved-numeric').innerText = `${formatMoney(cap)} ${mode === 'vacation' ? 'TND' : '$'}`;
 
         // B. Waterfall Tracker UI
         let wTarget = parseFloat(s.settings.waterfallTarget) || 2557;
@@ -2137,24 +2153,15 @@
         const v = s.vape_stash;
         document.getElementById('display-vape-metrics').innerHTML = `
             <div class="grid-3x" style="text-align:center; background:rgba(168, 85, 247, 0.05); padding:10px; border-radius:12px;">
-                <div>
-                    <span class="lbl-micro">Live Stash</span>
-                    <strong style="font-size:18px;">${v.count}</strong>
-                </div>
-                <div>
-                    <span class="lbl-micro">True Burn</span>
-                    <strong style="font-size:18px; color:var(--warning);">1 / ${v.true_burn_rate.toFixed(1)}d</strong>
-                </div>
-                <div>
-                    <span class="lbl-micro">Phase Left</span>
-                    <strong style="font-size:18px;">${v.phase_days_remaining.toFixed(0)}d</strong>
-                </div>
+                <div><span class="lbl-micro">Live Stash</span><strong style="font-size:18px;">${v.count}</strong></div>
+                <div><span class="lbl-micro">True Burn</span><strong style="font-size:18px; color:var(--warning);">1 / ${v.true_burn_rate.toFixed(1)}d</strong></div>
+                <div><span class="lbl-micro">Phase Left</span><strong style="font-size:18px;">${v.phase_days_remaining.toFixed(0)}d</strong></div>
             </div>
             <div class="telemetry-row" style="margin-top:4px; padding:10px 4px;">
                 <span style="font-weight:700;">Runway Shield Earmark:</span>
                 <strong style="color:var(--danger); font-size:16px;">-${formatMoney(v.future_liability_raw)} ${mode==='vacation'?'TND':'$'}</strong>
             </div>
-            <div style="font-size:9px; color:var(--text-muted); text-align:center;">Avg historical acquisition cost calculated at ${formatMoney(v.avg_cost)} per unit.</div>
+            <div style="font-size:9px; color:var(--text-muted); text-align:center;">Historical avg cost: ${formatMoney(v.avg_cost)} per unit based on ${v.total_units} total logged.</div>
             <button class="btn-ui" style="background:rgba(168, 85, 247, 0.15); color:var(--vape-purple); border:1px solid var(--vape-purple); width:100%; margin-top:8px;" onclick="promptVapeRestock()">Log Inventory Restock</button>
         `;
 
@@ -2169,14 +2176,10 @@
             let costBasis = asset.qty * asset.cost;
             let astPnl = val - costBasis;
             let pColor = astPnl >= 0 ? 'var(--success)' : 'var(--danger)';
-            
             assetContainer.innerHTML += `
                 <div class="nested-box" style="display:flex; flex-direction:column; gap:8px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <strong style="font-size:16px;">${asset.symbol}</strong>
-                            <div class="badge-dynamic badge-green" style="display:inline-block; margin-left:6px; font-size:8px;">Live: $${formatMoney(asset.price)}</div>
-                        </div>
+                        <div><strong style="font-size:16px;">${asset.symbol}</strong><div class="badge-dynamic badge-green" style="display:inline-block; margin-left:6px; font-size:8px;">Live: $${formatMoney(asset.price)}</div></div>
                         <button class="btn-panel-action" onclick="openAssetManager(${idx})">Manage</button>
                     </div>
                     <div class="grid-3x" style="text-align:center; background:rgba(0,0,0,0.1); padding:6px; border-radius:8px;">
@@ -2184,11 +2187,7 @@
                         <div><span class="lbl-micro">Value</span><strong>$${formatMoney(val)}</strong></div>
                         <div><span class="lbl-micro">Growth</span><strong style="color:${pColor};">${astPnl>=0?'+':''}$${formatMoney(astPnl)}</strong></div>
                     </div>
-                    ${asset.div_type === 'accumulating' ? `
-                        <div style="font-size:10px; color:var(--text-muted); text-align:right;">Ghost Yield Reinvested: <span style="color:var(--success); font-weight:700;">$${formatMoney(asset.ghost_yield || 0)}</span></div>
-                    ` : ''}
-                </div>
-            `;
+                </div>`;
         });
 
         // E. Sub-Trackers (Envelopes, Missions, Goals)
@@ -2196,28 +2195,70 @@
             const container = document.getElementById(containerId);
             container.innerHTML = '';
             Object.keys(obj).forEach(key => {
-                let p = obj[key];
-                if (p.archived) return; // Hide archived from main view
+                let p = obj[key]; if (p.archived) return;
                 let rem = parseFloat(p.limit) - parseFloat(p.spent);
                 let pct = (p.spent / p.limit) * 100;
                 let isDeficit = rem < 0;
-                
                 container.innerHTML += `
                     <div class="nested-box" style="border-left: 4px solid ${isDeficit ? 'var(--danger)' : 'var(--info)'}; padding-left:12px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <strong style="font-size:13px;">${p.name}</strong>
                             <span style="font-size:12px; font-weight:700; color:${isDeficit ? 'var(--danger)' : 'var(--text-main)'};">${isDeficit ? 'OVER ' : ''}${formatMoney(Math.abs(rem))} ${p.currency} left</span>
                         </div>
-                        <div class="track-wrapper" style="height:6px; margin-bottom:4px;">
-                            <div class="track-fill" style="width:${Math.min(pct, 100)}%; background:${isDeficit ? 'var(--danger)' : 'var(--info)'};"></div>
-                        </div>
-                        <div style="font-size:10px; color:var(--text-muted); text-align:right;">Spent: ${formatMoney(p.spent)} / ${formatMoney(p.limit)}</div>
-                    </div>
-                `;
+                        <div class="track-wrapper" style="height:6px; margin-bottom:4px;"><div class="track-fill" style="width:${Math.min(pct, 100)}%; background:${isDeficit ? 'var(--danger)' : 'var(--info)'};"></div></div>
+                    </div>`;
             });
         };
         renderTrackers(s.projects.envelopes, 'container-envelopes');
         renderTrackers(s.projects.missions, 'container-missions');
+
+        // Goals
+        const goalContainer = document.getElementById('container-goals');
+        goalContainer.innerHTML = '';
+        (s.projects.goals || []).forEach(g => {
+            if (g.archived) return;
+            let pct = (g.saved / g.target) * 100;
+            goalContainer.innerHTML += `
+                <div class="nested-box" style="border-left: 4px solid var(--success); padding-left:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <strong style="font-size:13px;">${g.name}</strong><span style="font-size:12px; font-weight:700;">${formatMoney(g.saved)} / ${formatMoney(g.target)} ${g.currency}</span>
+                    </div>
+                    <div class="track-wrapper" style="height:6px;"><div class="track-fill" style="width:${Math.min(pct, 100)}%; background:var(--success);"></div></div>
+                </div>`;
+        });
+
+        // F. Charts & Leaderboard
+        let locs = {}; let cats = {}; let chartTotal = 0;
+        (s.history[mode].archive || []).forEach(d => {
+            (d.logs || []).forEach(l => {
+                if (l.location) locs[l.location] = (locs[l.location] || 0) + l.amount;
+                if (l.cat) { cats[l.cat] = (cats[l.cat] || 0) + l.amount; chartTotal += l.amount; }
+            });
+        });
+        (s.history[mode].current || []).forEach(l => {
+            if (l.location) locs[l.location] = (locs[l.location] || 0) + l.amount;
+            if (l.cat) { cats[l.cat] = (cats[l.cat] || 0) + l.amount; chartTotal += l.amount; }
+        });
+
+        // Render Leaderboard
+        const leadHtml = Object.keys(locs).sort((a,b)=>locs[b]-locs[a]).map((k,i) => `
+            <div class="stream-card" style="padding:6px 10px;">
+                <div><span style="font-size:9px; color:var(--text-muted); margin-right:6px;">#${i+1}</span><strong>${k}</strong></div>
+                <div style="font-size:12px; font-weight:700; color:var(--accent);">${formatMoney(locs[k])}</div>
+            </div>`).join('');
+        document.getElementById('list-analytics-leaderboard').innerHTML = leadHtml || '<div style="text-align:center; font-size:11px; padding:10px;">No location data found.</div>';
+
+        // Render Category Charts
+        const chartHtml = Object.keys(cats).sort((a,b)=>cats[b]-cats[a]).map(k => {
+            let pct = chartTotal > 0 ? (cats[k]/chartTotal)*100 : 0;
+            return `
+            <div class="chart-row-node">
+                <span style="width:110px; font-size:11px; font-weight:600; text-transform:uppercase;">${k}</span>
+                <div class="chart-bar-rail"><div class="chart-bar-core" style="width:${pct}%;"></div></div>
+                <span style="width:50px; text-align:right; font-weight:700;">${formatMoney(cats[k])}</span>
+            </div>`;
+        }).join('');
+        document.getElementById('container-analytics-charts').innerHTML = chartHtml || '<div style="text-align:center; font-size:11px;">No category data found.</div>';
     }
 
     // ==========================================
