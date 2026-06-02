@@ -3986,28 +3986,23 @@ function renderIncomeLogs() {
     let settlements = [];
     let others = [];
 
-    // Separate the logs and retain their exact database index for safe deletion
     (s.income_logs || []).forEach((log, idx) => {
         log._origIdx = idx; 
         if (log.source === 'paycheck') {
             paychecks.push(log);
         } else if (log.desc && log.desc.includes('✅ Wire Settled') && log.parentId) {
-            // Only group NEW settlements that have a tracking ID
             settlements.push(log);
         } else {
-            // Old legacy settlements, side gigs, and manual deposits go here safely
             others.push(log);
         }
     });
 
-    // Nest new settlements inside their parent paychecks
     paychecks.forEach(p => p._settlements = []);
     settlements.forEach(sLog => {
         let parent = paychecks.find(p => p.id && p.id === sLog.parentId);
         if (parent) parent._settlements.push(sLog);
     });
 
-    // 1. Build the Paycheck Folders
     let pHtml = '';
     paychecks.forEach(p => {
         let amt = parseFloat(p.amount) || 0;
@@ -4020,7 +4015,6 @@ function renderIncomeLogs() {
         pHtml += `    </div>`;
         pHtml += `  </div>`;
         
-        // The Hidden Wires Folder
         if (p._settlements && p._settlements.length > 0) {
             pHtml += `  <div id="settlements_${p._origIdx}" style="display:none; margin-top:8px; padding-top:8px; border-top:1px dashed var(--panel-border); margin-left:10px;">`;
             p._settlements.forEach(sLog => {
@@ -4039,7 +4033,6 @@ function renderIncomeLogs() {
     });
     document.getElementById('paycheckList').innerHTML = pHtml || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No paychecks logged yet.</div>';
 
-    // 2. Build the Other Income List
     let oHtml = '';
     others.forEach(o => {
         let amt = parseFloat(o.amount) || 0;
@@ -4054,13 +4047,11 @@ function renderIncomeLogs() {
     document.getElementById('otherIncomeList').innerHTML = oHtml || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No other income logged.</div>';
 }
 
-
 async function deleteIncome(index) {
     let log = s.income_logs[index];
     let c = await openUConfirm("Delete Income", "Delete this record and reverse its effect on your balances?");
     if (!c) return;
 
-    // 1. REVERSE PAYCHECK & TRANSIT QUEUE
     if (log.source === 'paycheck') {
         let opMatch = log.desc.match(/Op: \$([0-9.]+)/);
         let stbMatch = log.desc.match(/STB: \$([0-9.]+)/);
@@ -4070,10 +4061,8 @@ async function deleteIncome(index) {
         let lA = stbMatch ? parseFloat(stbMatch[1]) : 0;
         let sA = savMatch ? parseFloat(savMatch[1]) : 0;
 
-        // Pull money back out of Brightwell
         s.vault.brightwell = Math.max(0, (parseFloat(s.vault.brightwell) || 0) - oA);
 
-        // Yank the exact wires out of the Transit Queue
         if (s.transit_queue) {
             if (lA > 0) {
                 let tIdx = s.transit_queue.findIndex(w => w.type === 'stb' && Math.abs(w.amount - lA) < 0.01);
@@ -4085,17 +4074,13 @@ async function deleteIncome(index) {
             }
         }
     } 
-    // 2. REVERSE WIRE SETTLEMENTS & RESURRECT THE WIRE
     else if (log.desc && log.desc.includes('✅ Wire Settled')) {
-        
-        // A. Reverse the TND impacts
         if (log.wallet === 'STB Settlement') {
             s.loan.arrears = (parseFloat(s.loan.arrears) || 0) + parseFloat(log.amount);
         } else if (log.wallet === 'Savings' || log.wallet === 'savings') {
             s.vault.savings = Math.max(0, (parseFloat(s.vault.savings) || 0) - parseFloat(log.amount));
         }
 
-        // B. Resurrect the original USD wire back into the queue
         let match = log.desc.match(/Settled: \$([0-9.]+)/);
         if (match) {
             let origUSD = parseFloat(match[1]);
@@ -4108,8 +4093,7 @@ async function deleteIncome(index) {
                 parentId: log.parentId
             });
         }
-
-    // 3. REVERSE NORMAL INCOME
+    } 
     else {
         let targetWallet = log.wallet ? log.wallet.toLowerCase() : '';
         if (s.vault[targetWallet] !== undefined) {
@@ -4117,18 +4101,15 @@ async function deleteIncome(index) {
         }
     }
 
-    // Erase the receipt
     s.income_logs.splice(index, 1);
-    
-    // Save and refresh everything
     saveState();
     
-    // Auto-update dashboard button if you are on Dash tab
     if (document.getElementById('tab-dash').classList.contains('active')) {
         renderDashboard();
+    } else {
+        renderIncomeLogs();
     }
 }
-
 
     function openTransferModal() { 
         document.getElementById('trfAmount').value = ''; 
