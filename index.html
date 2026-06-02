@@ -646,6 +646,10 @@
                 <button style="background:none; border:none; color:var(--text-muted); font-size:10px; cursor:pointer; width:100%; text-align:center; margin-top:12px; text-decoration:underline;" onclick="document.getElementById('editModal').style.display='flex'; event.stopPropagation();">
                     ✏️ Manual Override Balances
                 </button>
+                <button id="uiPendingWires" class="v-btn" style="display:none; width:100%; margin-top:12px; background:var(--warning); color:#000; box-shadow: 0px 4px 10px rgba(250, 204, 21, 0.2);" onclick="openTransitModal(); event.stopPropagation();">
+                    ⏳ 0 Wires Pending
+                </button>
+
             </div>
 
             <!-- SCOREBOARD -->
@@ -1276,10 +1280,6 @@
                         $ <input type="number" id="pwSavAmt" style="width:60px; padding:4px; font-size:12px; text-align:right; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="calcPaycheck('amt', 'sav')">
                     </div>
                 </div>
-                <select id="pwSavDest" style="margin-top:4px; font-size:10px; padding:6px;">
-                    <option value="ibkr">Route to: IBKR (Idle Cash)</option>
-                    <option value="savings">Route to: Savings (TND)</option>
-                </select>
                 
                 <div style="display:flex; justify-content:space-between; font-size:11px; margin-top:8px; padding-top:8px; border-top:1px dashed var(--panel-border); align-items:center;">
                     <span style="color:var(--success); display:flex; align-items:center; gap:4px;">
@@ -1600,6 +1600,27 @@
             </div>
         </div>
     </div>
+        <div class="modal-overlay" id="transitModal">
+        <div class="modal-content">
+            <div class="title" style="text-align:center; color:var(--warning);">⏳ Pending Wires</div>
+            <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Money currently floating in the banking system.</div>
+            
+            <div id="transitList" style="display:flex; flex-direction:column; gap:10px;"></div>
+            
+            <div id="transitSettleForm" style="display:none; margin-top:15px; border-top:1px dashed var(--panel-border); padding-top:15px;">
+                <div style="font-size:11px; color:var(--success); margin-bottom:8px; font-weight:bold;" id="tsTitle">Settling...</div>
+                <input type="hidden" id="tsIndex">
+                <input type="number" id="tsExactTND" placeholder="Exact TND received in bank" style="width:100%; border-color:var(--success);" inputmode="decimal">
+                <div class="modal-btn-row">
+                    <button class="btn-secondary" onclick="document.getElementById('transitSettleForm').style.display='none'">Cancel</button>
+                    <button class="v-btn" style="background:var(--success);" onclick="confirmSettleWire()">Confirm Settlement</button>
+                </div>
+            </div>
+
+            <button class="btn-secondary" style="margin-top:15px;" onclick="document.getElementById('transitModal').style.display='none'">Close</button>
+        </div>
+    </div>
+
 
     <!-- BOTTOM NAVIGATION -->
     <div class="bottom-nav">
@@ -1888,7 +1909,8 @@
         }
 
         if (!s.custom_categories) s.custom_categories = [];
-        
+        if (!s.transit_queue) s.transit_queue = [];
+
         if (s.capital_saved_tnd === undefined) {
             s.capital_saved_tnd = (s.capital_saved !== undefined) ? parseFloat(s.capital_saved) || 0 : 0;
             if (Math.abs(s.capital_saved_tnd - 103.2) < 0.01) s.capital_saved_tnd = 68.2;
@@ -2712,6 +2734,18 @@
         document.getElementById('spilloverAlert').style.display = hasSpillover ? 'block' : 'none';
         
         updateDynamicCountdown();
+                // WIRE TRANSIT BUTTON UPDATE
+        let uiWireBtn = document.getElementById('uiPendingWires');
+        if (uiWireBtn) {
+            if (s.transit_queue && s.transit_queue.length > 0) {
+                let pendingTotal = s.transit_queue.reduce((sum, w) => sum + w.amount, 0);
+                uiWireBtn.innerHTML = `⏳ ${s.transit_queue.length} Wires Pending ($${pendingTotal.toFixed(2)})`;
+                uiWireBtn.style.display = 'block';
+            } else {
+                uiWireBtn.style.display = 'none';
+            }
+        }
+
     }
 
     // ==========================================
@@ -3779,31 +3813,106 @@ if(document.getElementById('advVapeBrand')) {
         }
     }
 
-    function processPaycheck() {
-        let oA = parseFloat(document.getElementById('pwOpAmt').value) || 0; 
-        let lA = parseFloat(document.getElementById('pwLoanAmt').value) || 0; 
-        let sA = parseFloat(document.getElementById('pwSavAmt').value) || 0;
-        let dest = document.getElementById('pwSavDest').value;
-        let fx = parseFloat(s.fx_rate) || 2.923;
-        
+function processPaycheck() {
+    let g = parseFloat(document.getElementById('pwGross').value) || 0;
+    let oA = parseFloat(document.getElementById('pwOpAmt').value) || 0; 
+    let lA = parseFloat(document.getElementById('pwLoanAmt').value) || 0; 
+    let sA = parseFloat(document.getElementById('pwSavAmt').value) || 0;
+    
+    if (g <= 0) return alert("Enter a valid gross pay.");
+
+    // 1. Immediate Operational Funds to Brightwell
+    if (oA > 0) {
         s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + oA;
-        
-        if (lA > 0) { 
-            s.vault.lifetime_fees = (parseFloat(s.vault.lifetime_fees) || 0) + 10; 
-            s.loan.arrears = Math.max(0, (parseFloat(s.loan.arrears) || 0) - (lA * fx)); 
-        }
-        
-        if (sA > 0) { 
-            if (dest === 'ibkr') {
-                s.vault.ibkr_cash = (parseFloat(s.vault.ibkr_cash) || 0) + sA; 
-            } else { 
-                s.vault.savings = (parseFloat(s.vault.savings) || 0) + (sA * fx); 
-            }
-        }
-        
-        saveState(); 
-        document.getElementById('paycheckModal').style.display = 'none';
     }
+    
+    // 2. Route STB and Savings to the Transit Queue
+    if (!s.transit_queue) s.transit_queue = [];
+    if (lA > 0) {
+        s.transit_queue.push({ type: 'stb', amount: lA, date: new Date().toLocaleDateString('en-CA') });
+    }
+    if (sA > 0) {
+        s.transit_queue.push({ type: 'savings', amount: sA, date: new Date().toLocaleDateString('en-CA') });
+    }
+    
+    // 3. Generate the Master Income Receipt
+    let detailsStr = `Op: $${oA.toFixed(2)} (Cleared) | STB: $${lA.toFixed(2)} (Pending) | Sav: $${sA.toFixed(2)} (Pending)`;
+    s.income_logs.unshift({ 
+        date: new Date().toLocaleDateString('en-CA'), 
+        amount: g, 
+        source: 'paycheck', 
+        wallet: 'SPLIT ROUTING', 
+        desc: '🚢 Carnival Paycheck - ' + detailsStr 
+    });
+
+    saveState(); 
+    document.getElementById('paycheckModal').style.display = 'none';
+    if (document.getElementById('tab-time').classList.contains('active')) renderIncomeLogs();
+}
+        function openTransitModal() {
+        let h = '';
+        (s.transit_queue || []).forEach((w, i) => {
+            let lbl = w.type === 'stb' ? 'STB Arrears' : 'Savings TND';
+            let col = w.type === 'stb' ? 'var(--danger)' : 'var(--success)';
+            h += `<div class="iou-item" style="border-color:${col};">
+                    <div><strong style="color:${col};">${lbl}</strong><div style="font-size:9px; color:var(--text-muted);">Initiated: ${w.date}</div></div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-weight:bold;">$${w.amount.toFixed(2)}</span>
+                        <button class="iou-btn" onclick="initSettleWire(${i})">Settle</button>
+                    </div>
+                  </div>`;
+        });
+        document.getElementById('transitList').innerHTML = h || '<div style="font-size:11px; text-align:center; color:var(--text-muted);">No pending wires.</div>';
+        document.getElementById('transitSettleForm').style.display = 'none';
+        document.getElementById('transitModal').style.display = 'flex';
+    }
+
+    function initSettleWire(index) {
+        let w = s.transit_queue[index];
+        document.getElementById('tsIndex').value = index;
+        document.getElementById('tsTitle').innerText = `Settling $${w.amount.toFixed(2)} -> ${w.type === 'stb' ? 'STB' : 'Savings'}`;
+        document.getElementById('tsExactTND').value = '';
+        document.getElementById('transitSettleForm').style.display = 'block';
+    }
+
+    function confirmSettleWire() {
+        let idx = parseInt(document.getElementById('tsIndex').value);
+        let w = s.transit_queue[idx];
+        let exactTND = parseFloat(document.getElementById('tsExactTND').value);
+        
+        if (isNaN(exactTND) || exactTND <= 0) return alert("Enter exact TND amount credited to your bank.");
+        
+        // Analytical Bonus: Calculate the true FX Spread
+        let liveFX = parseFloat(s.fx_rate) || 2.923;
+        let bankFX = exactTND / w.amount;
+        let expectedTND = w.amount * liveFX;
+        let fxSpreadLoss = expectedTND - exactTND;
+        
+        // Apply to exact vaults
+        if (w.type === 'stb') {
+            s.loan.arrears = Math.max(0, (parseFloat(s.loan.arrears) || 0) - exactTND);
+        } else {
+            s.vault.savings = (parseFloat(s.vault.savings) || 0) + exactTND;
+        }
+        
+        // Log Settlement Receipt with the analytical data
+        let fxStr = `Bank Rate: ${bankFX.toFixed(3)} | Market: ${liveFX.toFixed(3)} | Spread Loss: ${fxSpreadLoss.toFixed(2)} TND`;
+        s.income_logs.unshift({
+            date: new Date().toLocaleDateString('en-CA'),
+            amount: exactTND,
+            source: 'custom',
+            wallet: w.type === 'stb' ? 'STB Settlement' : 'Savings',
+            desc: `✅ Wire Settled: $${w.amount.toFixed(2)} -> ${exactTND.toFixed(2)} TND | ` + fxStr
+        });
+        
+        s.transit_queue.splice(idx, 1);
+        saveState();
+        openTransitModal(); 
+        
+        if (s.transit_queue.length === 0) document.getElementById('transitModal').style.display = 'none';
+        if (document.getElementById('tab-time').classList.contains('active')) renderIncomeLogs();
+    }
+
 
     function openSTBModal() { 
         document.getElementById('stbPayAmt').value = ''; 
