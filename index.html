@@ -2902,8 +2902,9 @@
             s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + surplusTND;
         }
         
+        // BUG FIX: Forces strict YYYY-MM-DD formatting for the database
         s.history[s.mode].archive.push({ 
-            date: new Date().toLocaleDateString(), 
+            date: new Date().toLocaleDateString('en-CA'), 
             logs: [...curLogs], 
             limit: lim, 
             surplus: curBal 
@@ -3743,10 +3744,10 @@
     let tmEditIndex = -1;
     
     function loadPastDay() {
-        let d = document.getElementById('tmDate').value; 
-        if (!d) return;
+        // BUG FIX: Natively read YYYY-MM-DD directly from the input without messy translations
+        let dStr = document.getElementById('tmDate').value; 
+        if (!dStr) return;
         
-        let dStr = new Date(d).toLocaleDateString();
         let arch = (s.history[s.mode].archive || []).find(x => x.date === dStr);
         
         tmCurrentDayObj = arch; 
@@ -3767,7 +3768,6 @@
         
         document.getElementById('tmList').innerHTML = h || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No expenses logged for this date.</div>';
         
-        // BUG FIX: Always show the "Log Past Expense" button if a date is selected, even if it's empty!
         document.getElementById('btnToggleTMForm').style.display = 'block'; 
         document.getElementById('tmFormContainer').style.display = 'none';
     }
@@ -3839,8 +3839,8 @@
             tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact; 
         } else { 
             if (!tmCurrentDayObj) {
-                // CREATE A NEW DAY IN THE ARCHIVE
-                let dStr = new Date(document.getElementById('tmDate').value).toLocaleDateString();
+                // BUG FIX: Write strictly in YYYY-MM-DD
+                let dStr = document.getElementById('tmDate').value; 
                 let lim = parseFloat(s.history[s.mode].limit) || 0;
                 tmCurrentDayObj = {
                     date: dStr,
@@ -3850,17 +3850,14 @@
                 };
                 s.history[s.mode].archive.push(tmCurrentDayObj);
                 s.history[s.mode].archive.sort((a,b) => new Date(a.date) - new Date(b.date));
-                // Impact is the total initial saved capital (Limit - Amount)
                 surplusImpact = tmCurrentDayObj.surplus;
             } else {
-                // Append to existing day
                 tmCurrentDayObj.logs.unshift(newItem); 
                 surplusImpact = -amt; 
                 tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact; 
             }
         }
         
-        // --- SYNCHRONIZE GLOBAL CAPITAL SAVED ---
         let fx = parseFloat(s.fx_rate) || 2.923;
         if (s.mode === 'vacation') {
             s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + surplusImpact;
@@ -3868,22 +3865,21 @@
             s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + (surplusImpact * fx);
         }
 
-        // --- SYNCHRONIZE PHYSICAL VAULT ---
         let targetWallet = wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : wallet;
         let deductAmt = (!isNaN(actualDeduct) && actualDeduct > 0) ? actualDeduct : (amt + ship + tax);
 
         if (oldItem) {
             let oldWallet = oldItem.wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : oldItem.wallet;
             let oldDeduct = (!isNaN(oldItem.actualDeduct) && oldItem.actualDeduct > 0) ? oldItem.actualDeduct : ((parseFloat(oldItem.amount)||0) + (parseFloat(oldItem.shipping)||0) + (parseFloat(oldItem.tax)||0));
-            if (s.vault[oldWallet] !== undefined) s.vault[oldWallet] += oldDeduct; // Refund old
+            if (s.vault[oldWallet] !== undefined) s.vault[oldWallet] += oldDeduct; 
         }
-        if (s.vault[targetWallet] !== undefined) s.vault[targetWallet] -= deductAmt; // Deduct new
+        if (s.vault[targetWallet] !== undefined) s.vault[targetWallet] -= deductAmt; 
 
         saveState(); 
         cancelTMEdit(); 
         loadPastDay();
     }
-    
+
     function deleteExpense(i, src) {
         let surplusImpact = 0;
 
