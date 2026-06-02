@@ -1516,6 +1516,23 @@
             </div>
         </div>
     </div>
+        <div class="modal-overlay" id="editVapeModal">
+        <div class="modal-content">
+            <div class="title" style="text-align:center; font-size:12px; color:#a855f7;">✏️ Edit Vape Asset</div>
+            <input type="hidden" id="evId">
+            <input type="text" id="evBrand" placeholder="Brand (e.g., Elfbar)" style="margin-top:15px; width:100%;">
+            <input type="text" id="evFlavor" placeholder="Flavor (e.g., Mint)" style="margin-top:10px; width:100%;">
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <input type="number" id="evPuffs" placeholder="Puffs" style="flex:1;" inputmode="numeric">
+                <input type="number" id="evML" placeholder="Volume ML" style="flex:1;" inputmode="decimal">
+            </div>
+            <div class="modal-btn-row">
+                <button class="btn-secondary" onclick="document.getElementById('editVapeModal').style.display='none'">Cancel</button>
+                <button class="v-btn" style="background:#a855f7; color:#fff;" onclick="saveVapeEdit()">Save Details</button>
+            </div>
+        </div>
+    </div>
+
     <!-- V38 IOU ENGINE MODALS -->
     <div class="modal-overlay" id="iouModal">
         <div class="modal-content">
@@ -2900,10 +2917,32 @@
             }
         }
         
-        if (cat === '💨 Vape') { 
+                if (cat === '💨 Vape') { 
             bypass = true; 
-            if (vapeQty > 0) s.vape_stash.count += vapeQty; 
+            if (vapeQty > 0) {
+                s.vape_stash.count += vapeQty; 
+                let vB = document.getElementById('advVapeBrand').value.trim() || 'Unknown Brand';
+                let vF = document.getElementById('advVapeFlavor').value.trim() || 'Unknown Flavor';
+                let vP = document.getElementById('advVapePuffs').value || '';
+                let vM = document.getElementById('advVapeML').value || '';
+                
+                for(let i=0; i<vapeQty; i++) {
+                    let hasActive = (s.vape_stash.inventory || []).some(v => v.status === 'active');
+                    let st = hasActive ? 'sealed' : 'active';
+                    s.vape_stash.inventory.push({
+                        id: 'vape_' + Date.now() + '_' + i,
+                        status: st,
+                        brand: vB,
+                        flavor: vF,
+                        puffs: vP,
+                        ml: vM,
+                        opened_ts: st === 'active' ? Date.now() : null,
+                        killed_ts: null
+                    });
+                }
+            }
         }
+
 
         // Apply deduction to Daily Pocket Limit
         if (!bypass) {
@@ -2948,8 +2987,16 @@
         document.getElementById('customAmount').value = ''; 
         document.getElementById('advMain').style.display = 'none';
         document.getElementById('advShipping').value = ''; 
-        document.getElementById('advTax').value = ''; 
-        document.getElementById('advActualDeduct').value = '';
+document.getElementById('advTax').value = ''; 
+document.getElementById('advActualDeduct').value = '';
+if(document.getElementById('advVapeBrand')) {
+    document.getElementById('advVapeBrand').value = '';
+    document.getElementById('advVapeFlavor').value = '';
+    document.getElementById('advVapePuffs').value = '';
+    document.getElementById('advVapeML').value = '';
+    document.getElementById('advVapeQty').value = '';
+}
+
         
         saveState();
     }
@@ -3139,22 +3186,56 @@
             } 
         }
     }
-        async function consumeVape() {
-        if (!s.vape_stash) s.vape_stash = { count: 0, empty_logs: [] };
-        if (s.vape_stash.count <= 0) {
-            return alert("Your stash is already empty!");
-        }
+    function editVape(id) {
+        let v = s.vape_stash.inventory.find(x => x.id === id);
+        if(!v) return;
+        document.getElementById('evId').value = v.id;
+        document.getElementById('evBrand').value = v.brand === 'Legacy Unit' ? '' : v.brand;
+        document.getElementById('evFlavor').value = v.flavor === 'Needs Details' ? '' : v.flavor;
+        document.getElementById('evPuffs').value = v.puffs || '';
+        document.getElementById('evML').value = v.ml || '';
+        document.getElementById('editVapeModal').style.display = 'flex';
+    }
+    
+    function saveVapeEdit() {
+        let id = document.getElementById('evId').value;
+        let v = s.vape_stash.inventory.find(x => x.id === id);
+        if(!v) return;
         
-        let c = await openUConfirm("Consume Vape", "Mark one vape as completely empty? This will permanently log its lifespan.");
-        if (c) {
-            s.vape_stash.count -= 1;
-            if (!s.vape_stash.empty_logs) s.vape_stash.empty_logs = [];
-            s.vape_stash.empty_logs.push(Date.now());
-            
+        v.brand = document.getElementById('evBrand').value.trim() || 'Unknown Brand';
+        v.flavor = document.getElementById('evFlavor').value.trim() || 'Unknown Flavor';
+        v.puffs = document.getElementById('evPuffs').value || '';
+        v.ml = document.getElementById('evML').value || '';
+        
+        saveState();
+        document.getElementById('editVapeModal').style.display = 'none';
+        if (document.getElementById('tab-analytics').classList.contains('active')) renderVapeStats();
+    }
+    
+    function openSealedVape(id) {
+        let v = s.vape_stash.inventory.find(x => x.id === id);
+        if(v) {
+            v.status = 'active';
+            v.opened_ts = Date.now();
             saveState();
-            renderVapeStats(); // Instantly update the UI
+            renderVapeStats();
         }
     }
+    
+    async function markVapeDead(id) {
+        let c = await openUConfirm("Kill Vape", "Mark this specific unit as completely empty?");
+        if(c) {
+            let v = s.vape_stash.inventory.find(x => x.id === id);
+            if(v) {
+                v.status = 'dead';
+                v.killed_ts = Date.now();
+                s.vape_stash.count = Math.max(0, s.vape_stash.count - 1); 
+                saveState();
+                renderVapeStats();
+            }
+        }
+    }
+
 
     function renderVapeStats() {
         let totalSpend = 0;
@@ -3241,21 +3322,56 @@
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Total Lifetime Spend:</span> <strong style="color:var(--danger);">${totalSpend.toFixed(2)} (Combined)</strong></div>`;
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>True Burn Rate:</span> <strong style="color:var(--warning);">1 Vape / ${trueVapeBurnRate.toFixed(1)} Days</strong></div>`;
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Days Since Last Restock:</span> <strong style="${daysSinceLast < trueVapeBurnRate ? 'color:var(--success);' : 'color:var(--danger);'}">${purchaseDates.length > 0 ? daysSinceLast + ' Days (' + lastDateStr + ')' : 'No Data'}</strong></div>`;
-                h += `<div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-bottom:6px;">
-                <span>Current Stash Inventory:</span> 
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <strong style="color:#a855f7;">${currentStash} Devices Ready</strong>
-                    <button onclick="consumeVape()" style="background:var(--danger); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:9px; cursor:pointer; font-weight:bold;">MARK EMPTY</button>
-                </div>
-              </div>`;
-
+                 h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Current Stash Inventory:</span> <strong style="color:#a855f7;">${currentStash} Devices Ready</strong></div>`;
         
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; border-top:1px dashed var(--panel-border); padding-top:6px; margin-top:6px;">`;
         h += `<span>Est. Phase Spend (${daysLeft} Days):</span>`;
         h += `<strong style="color:#38bdf8;">~${Math.ceil(vapesToBuy)} Vapes (${projectedSpend.toFixed(2)} ${sym})</strong></div>`;
+
+        // THE ARMORY INJECTION
+        h += `<div style="margin-top:15px; font-size:11px; font-weight:bold; color:var(--text); border-bottom:1px solid var(--panel-border); padding-bottom:4px;">🛡️ The Armory (Inventory)</div>`;
+        let inv = s.vape_stash.inventory || [];
+        
+        let actives = inv.filter(v => v.status === 'active');
+        if(actives.length > 0) {
+            h += `<div style="margin-top:8px; color:var(--success); font-size:10px; font-weight:bold;">🟢 Active Units</div>`;
+            actives.forEach(v => {
+                h += `<div class="iou-item" style="padding:8px; border-color:var(--success);">`;
+                h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">${v.puffs ? v.puffs+' Puffs' : ''} ${v.ml ? v.ml+' ML' : ''}</div></div>`;
+                h += `<div style="display:flex; gap:6px;">
+                        <button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer;">✏️</button>
+                        <button onclick="markVapeDead('${v.id}')" class="iou-btn" style="background:var(--danger); color:#fff; font-size:9px;">KILL</button>
+                      </div></div>`;
+            });
+        }
+        
+        let sealed = inv.filter(v => v.status === 'sealed');
+        if(sealed.length > 0) {
+            h += `<div style="margin-top:8px; color:#38bdf8; font-size:10px; font-weight:bold;">📦 Sealed Units</div>`;
+            sealed.forEach(v => {
+                h += `<div class="iou-item" style="padding:8px; border-color:#38bdf8;">`;
+                h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">${v.puffs ? v.puffs+' Puffs' : ''} ${v.ml ? v.ml+' ML' : ''}</div></div>`;
+                h += `<div style="display:flex; gap:6px;">
+                        <button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer;">✏️</button>
+                        <button onclick="openSealedVape('${v.id}')" class="iou-btn" style="background:#38bdf8; color:#0f172a; font-size:9px;">OPEN</button>
+                      </div></div>`;
+            });
+        }
+        
+        let dead = inv.filter(v => v.status === 'dead').sort((a,b) => b.killed_ts - a.killed_ts);
+        if(dead.length > 0) {
+            h += `<div style="margin-top:8px; color:var(--text-muted); font-size:10px; font-weight:bold;">🪦 Graveyard (Last 5)</div>`;
+            dead.slice(0, 5).forEach(v => {
+                let daysLived = v.opened_ts && v.killed_ts ? ((v.killed_ts - v.opened_ts)/86400000).toFixed(1) : '?';
+                h += `<div class="iou-item" style="padding:8px; border-color:var(--panel-border); opacity:0.6;">`;
+                h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">Lived: ${daysLived} Days</div></div>`;
+                h += `<button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer;">✏️</button></div>`;
+            });
+        }
         
         document.getElementById('vapeStatsHtml').innerHTML = h;
     }
+
     function renderLeaderboard() {
         let locs = {}; 
         let modeStr = s.mode === 'vacation' ? ' TND' : ' USD';
