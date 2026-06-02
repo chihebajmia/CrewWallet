@@ -3085,7 +3085,23 @@
             } 
         }
     }
-    
+        async function consumeVape() {
+        if (!s.vape_stash) s.vape_stash = { count: 0, empty_logs: [] };
+        if (s.vape_stash.count <= 0) {
+            return alert("Your stash is already empty!");
+        }
+        
+        let c = await openUConfirm("Consume Vape", "Mark one vape as completely empty? This will permanently log its lifespan.");
+        if (c) {
+            s.vape_stash.count -= 1;
+            if (!s.vape_stash.empty_logs) s.vape_stash.empty_logs = [];
+            s.vape_stash.empty_logs.push(Date.now());
+            
+            saveState();
+            renderVapeStats(); // Instantly update the UI
+        }
+    }
+
     function renderVapeStats() {
         let totalSpend = 0;
         let estDevices = 0;
@@ -3171,7 +3187,14 @@
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Total Lifetime Spend:</span> <strong style="color:var(--danger);">${totalSpend.toFixed(2)} (Combined)</strong></div>`;
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>True Burn Rate:</span> <strong style="color:var(--warning);">1 Vape / ${trueVapeBurnRate.toFixed(1)} Days</strong></div>`;
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Days Since Last Restock:</span> <strong style="${daysSinceLast < trueVapeBurnRate ? 'color:var(--success);' : 'color:var(--danger);'}">${purchaseDates.length > 0 ? daysSinceLast + ' Days (' + lastDateStr + ')' : 'No Data'}</strong></div>`;
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Current Stash Inventory:</span> <strong style="color:#a855f7;">${currentStash} Devices Ready</strong></div>`;
+                h += `<div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-bottom:6px;">
+                <span>Current Stash Inventory:</span> 
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <strong style="color:#a855f7;">${currentStash} Devices Ready</strong>
+                    <button onclick="consumeVape()" style="background:var(--danger); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:9px; cursor:pointer; font-weight:bold;">MARK EMPTY</button>
+                </div>
+              </div>`;
+
         
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; border-top:1px dashed var(--panel-border); padding-top:6px; margin-top:6px;">`;
         h += `<span>Est. Phase Spend (${daysLeft} Days):</span>`;
