@@ -3843,7 +3843,6 @@
             tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact; 
         } else { 
             if (!tmCurrentDayObj) {
-                // BUG FIX: Write strictly in YYYY-MM-DD
                 let dStr = document.getElementById('tmDate').value; 
                 let lim = parseFloat(s.history[s.mode].limit) || 0;
                 tmCurrentDayObj = {
@@ -3876,28 +3875,49 @@
             let oldWallet = oldItem.wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : oldItem.wallet;
             let oldDeduct = (!isNaN(oldItem.actualDeduct) && oldItem.actualDeduct > 0) ? oldItem.actualDeduct : ((parseFloat(oldItem.amount)||0) + (parseFloat(oldItem.shipping)||0) + (parseFloat(oldItem.tax)||0));
             if (s.vault[oldWallet] !== undefined) s.vault[oldWallet] += oldDeduct; 
+            
+            // --- SYNC OLD ENVELOPE / MISSION MATH ---
+            if (oldItem.project && oldItem.project !== 'none') {
+                let pType = oldItem.project.substring(0, 3);
+                let pKey = oldItem.project.substring(4);
+                let pObj = pType === 'env' ? s.projects.envelopes[pKey] : (pType === 'mis' ? s.projects.missions[pKey] : null);
+                if (pObj) pObj.spent = Math.max(0, (parseFloat(pObj.spent) || 0) - (parseFloat(oldItem.amount) || 0));
+            }
         }
         if (s.vault[targetWallet] !== undefined) s.vault[targetWallet] -= deductAmt; 
+        
+        // --- SYNC NEW ENVELOPE / MISSION MATH ---
+        if (proj && proj !== 'none') {
+            let pType = proj.substring(0, 3);
+            let pKey = proj.substring(4);
+            let pObj = pType === 'env' ? s.projects.envelopes[pKey] : (pType === 'mis' ? s.projects.missions[pKey] : null);
+            if (pObj) pObj.spent = (parseFloat(pObj.spent) || 0) + amt;
+        }
 
         saveState(); 
         cancelTMEdit(); 
         loadPastDay();
     }
-
+    
     function deleteExpense(i, src) {
         let surplusImpact = 0;
+        let item = src === 'current' ? s.history[s.mode].current[i] : tmCurrentDayObj.logs[i];
+        
+        // --- SYNCHRONIZE PROJECT REFUND UPON DELETION ---
+        if (item.project && item.project !== 'none') {
+            let pType = item.project.substring(0, 3);
+            let pKey = item.project.substring(4);
+            let pObj = pType === 'env' ? s.projects.envelopes[pKey] : (pType === 'mis' ? s.projects.missions[pKey] : null);
+            if (pObj) pObj.spent = Math.max(0, (parseFloat(pObj.spent) || 0) - (parseFloat(item.amount) || 0));
+        }
 
         if (src === 'current') { 
-            let item = s.history[s.mode].current[i]; 
-            
-            // Restore daily balance or refund spillover
             if (!item.bypassLimit) {
                 s.history[s.mode].balance = (parseFloat(s.history[s.mode].balance) || 0) + (parseFloat(item.amount) || 0); 
             } else if (parseFloat(item.spillover) > 0) {
                 s.history[s.mode].balance = (parseFloat(s.history[s.mode].balance) || 0) + parseFloat(item.spillover);
             }
 
-            // Refund the physical vault
             let refundWallet = item.wallet;
             if (!refundWallet || refundWallet === 'default') {
                 refundWallet = (s.mode === 'vacation') ? 'cash_tnd' : 'cash_usd';
@@ -3908,14 +3928,10 @@
             s.history[s.mode].current.splice(i, 1); 
 
         } else { 
-            let item = tmCurrentDayObj.logs[i];
             let amt = parseFloat(item.amount) || 0;
-            
-            // Increase the day's local surplus
             tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + amt; 
             surplusImpact = amt;
 
-            // --- SYNCHRONIZE GLOBAL CAPITAL SAVED ---
             let fx = parseFloat(s.fx_rate) || 2.923;
             if (s.mode === 'vacation') {
                 s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + surplusImpact;
@@ -3923,7 +3939,6 @@
                 s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + (surplusImpact * fx);
             }
             
-            // Refund the physical vault for historical deletion
             let refundWallet = item.wallet;
             if (!refundWallet || refundWallet === 'default') {
                 refundWallet = (s.mode === 'vacation') ? 'cash_tnd' : 'cash_usd';
@@ -3931,7 +3946,6 @@
             let refundAmt = (!isNaN(item.actualDeduct) && item.actualDeduct > 0) ? item.actualDeduct : ((parseFloat(item.amount)||0) + (parseFloat(item.shipping)||0) + (parseFloat(item.tax)||0));
 
             if (s.vault[refundWallet] !== undefined) s.vault[refundWallet] += refundAmt;
-            
             tmCurrentDayObj.logs.splice(i, 1); 
         }
         
