@@ -1,4 +1,4 @@
-const CACHE_NAME = 'crew-wallet-v38.17777-offline';
+const CACHE_NAME = 'crew-wallet-v38.18-offline';
 const FILES_TO_CACHE = [
   './',
   './index.html',
