@@ -1839,6 +1839,10 @@
             if (e.archived === undefined) e.archived = false; 
             if (e.bypass === undefined) e.bypass = true;
             if (!e.currency) e.currency = 'TND';
+            
+            // BUG FIX: Map legacy "limit" to "target" so Earmarks work
+            if (e.limit !== undefined && !e.target) { e.target = parseFloat(e.limit); delete e.limit; }
+            
             e.target = parseFloat(e.target) || 0;
             e.spent = parseFloat(e.spent) || 0;
         });
@@ -1848,6 +1852,10 @@
             if (m.archived === undefined) m.archived = false; 
             if (m.bypass === undefined) m.bypass = false;
             if (!m.currency) m.currency = 'TND';
+            
+            // BUG FIX: Map legacy "limit" to "target"
+            if (m.limit !== undefined && !m.target) { m.target = parseFloat(m.limit); delete m.limit; }
+            
             m.target = parseFloat(m.target) || 0;
             m.spent = parseFloat(m.spent) || 0;
         });
@@ -2490,10 +2498,53 @@
             if (b > 0) activeEnvTND += (e.currency === 'USD' ? b * fx : b); 
         });
         
-        let vapeTND = 0; 
-        let daysL = Math.ceil((new Date(s.mode === 'vacation' ? s.settings.contractStart : s.settings.contractEnd).getTime() - Date.now()) / 86400000);
-        daysL = Math.max(1, daysL); 
-        if (s.mode === 'vacation' && daysL > 0) vapeTND = Math.ceil(daysL / 4) * 35;
+         let vapeTND = 0; 
+        let cEnd = s.mode === 'vacation' ? new Date(s.settings.contractStart) : new Date(s.settings.contractEnd);
+        let daysL = Math.ceil((cEnd.getTime() - Date.now()) / 86400000);
+        daysL = Math.max(0, daysL); 
+        
+        if (daysL > 0) {
+            // BUG FIX: Calculate True Vape Burn Rate dynamically for the dashboard net runway
+            let estDevices = 0; let modeVapeSpend = 0; let modeVapeDevices = 0; let purchaseDates = [];
+            ['vacation', 'onboard'].forEach(m => {
+                let isCurrentMode = (m === s.mode);
+                (s.history[m].archive || []).forEach(day => {
+                    (day.logs || []).forEach(log => {
+                        if (log.category === '💨 Vape') {
+                            let amt = parseFloat(log.amount) || 0; let qty = parseInt(log.vapeQty) || 1;
+                            estDevices += qty;
+                            if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
+                            if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
+                            else if (day.date) purchaseDates.push(new Date(day.date));
+                        }
+                    });
+                });
+                (s.history[m].current || []).forEach(log => {
+                    if (log.category === '💨 Vape') {
+                        let amt = parseFloat(log.amount) || 0; let qty = parseInt(log.vapeQty) || 1;
+                        estDevices += qty;
+                        if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
+                        if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
+                        else purchaseDates.push(new Date());
+                    }
+                });
+            });
+
+            let trueVapeBurnRate = 4; // Fallback
+            if (purchaseDates.length > 0) {
+                purchaseDates.sort((a, b) => a.getTime() - b.getTime());
+                let totalDaysSmoking = Math.max(1, (Date.now() - purchaseDates[0].getTime()) / 86400000);
+                trueVapeBurnRate = totalDaysSmoking / estDevices;
+            }
+
+            let projectedVapesNeeded = daysL / trueVapeBurnRate;
+            let vapesToBuy = Math.max(0, projectedVapesNeeded - (parseInt(s.vape_stash.count) || 0));
+            let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (s.mode === 'vacation' ? 35 : 10);
+            
+            let projectedVapeSpend = vapesToBuy * modeAvgCost;
+            vapeTND = s.mode === 'vacation' ? projectedVapeSpend : (projectedVapeSpend * fx);
+        }
+
         
         let lockedBufTND = 0; 
         (s.projects.goals || []).filter(g => g.lockedFromRunway).forEach(g => { 
