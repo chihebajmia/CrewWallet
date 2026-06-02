@@ -3986,7 +3986,7 @@ function renderIncomeLogs() {
     document.getElementById('incomeList').innerHTML = h || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No income logged yet.</div>';
 }
 
-    async function deleteIncome(index) {
+async function deleteIncome(index) {
     let log = s.income_logs[index];
     let c = await openUConfirm("Delete Income", "Delete this record and reverse its effect on your balances?");
     if (!c) return;
@@ -4016,13 +4016,35 @@ function renderIncomeLogs() {
             }
         }
     } 
-    // 2. REVERSE WIRE SETTLEMENTS
-    else if (log.wallet === 'STB Settlement') {
-        s.loan.arrears = (parseFloat(s.loan.arrears) || 0) + parseFloat(log.amount);
-    }
+    // 2. REVERSE WIRE SETTLEMENTS & RESURRECT THE WIRE
+    else if (log.desc && log.desc.includes('✅ Wire Settled')) {
+        
+        // A. Reverse the TND impacts
+        if (log.wallet === 'STB Settlement') {
+            s.loan.arrears = (parseFloat(s.loan.arrears) || 0) + parseFloat(log.amount);
+        } else if (log.wallet === 'Savings' || log.wallet === 'savings') {
+            s.vault.savings = Math.max(0, (parseFloat(s.vault.savings) || 0) - parseFloat(log.amount));
+        }
+
+        // B. Resurrect the original USD wire back into the queue
+        let match = log.desc.match(/Settled: \$([0-9.]+)/);
+        if (match) {
+            let origUSD = parseFloat(match[1]);
+            let type = log.wallet === 'STB Settlement' ? 'stb' : 'savings';
+            if (!s.transit_queue) s.transit_queue = [];
+            s.transit_queue.push({
+                type: type,
+                amount: origUSD,
+                date: log.date
+            });
+        }
+    } 
     // 3. REVERSE NORMAL INCOME
-    else if (s.vault[log.wallet] !== undefined) {
-        s.vault[log.wallet] = Math.max(0, (parseFloat(s.vault[log.wallet]) || 0) - parseFloat(log.amount));
+    else {
+        let targetWallet = log.wallet ? log.wallet.toLowerCase() : '';
+        if (s.vault[targetWallet] !== undefined) {
+            s.vault[targetWallet] = Math.max(0, (parseFloat(s.vault[targetWallet]) || 0) - parseFloat(log.amount));
+        }
     }
 
     // Erase the receipt
@@ -4030,6 +4052,11 @@ function renderIncomeLogs() {
     
     // Save and refresh everything
     saveState();
+    
+    // Auto-update dashboard button if you are on Dash tab
+    if (document.getElementById('tab-dash').classList.contains('active')) {
+        renderDashboard();
+    }
 }
 
 
