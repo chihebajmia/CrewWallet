@@ -3748,7 +3748,6 @@
     let tmEditIndex = -1;
     
     function loadPastDay() {
-        // BUG FIX: Natively read YYYY-MM-DD directly from the input without messy translations
         let dStr = document.getElementById('tmDate').value; 
         if (!dStr) return;
         
@@ -3759,15 +3758,44 @@
         let h = '';
         
         if (arch) { 
+            let totalDailySpend = 0;
+            let limit = parseFloat(arch.limit) || 0;
+            let surplus = parseFloat(arch.surplus) || 0;
+            let sym = s.mode === 'vacation' ? 'TND' : 'USD';
+
+            let listHtml = '';
             (arch.logs || []).forEach((item, i) => { 
                 let amt = parseFloat(item.amount) || 0; 
-                h += `<div class="history-item">`;
-                h += `<div><strong>${item.desc || 'Expense'}</strong><span class="cat-badge">${item.category || 'N/A'}</span>`;
-                h += `<div class="history-details">${item.time || ''} | ${item.location || '--'}</div></div>`;
-                h += `<div><span style="color:var(--danger); font-weight:bold; margin-right:10px;">-${amt.toFixed(2)}</span>`;
-                h += `<button class="edit-btn" onclick="editPastExpense(${i})">✏️</button>`;
-                h += `<button class="edit-btn" onclick="deleteExpense(${i}, 'archive')">🗑️</button></div></div>`; 
+                totalDailySpend += amt;
+                
+                listHtml += `<div class="history-item">`;
+                listHtml += `<div><strong>${item.desc || 'Expense'}</strong><span class="cat-badge">${item.category || 'N/A'}</span>`;
+                listHtml += `<div class="history-details">${item.time || ''} | ${item.location || '--'} | ${item.wallet.replace('_', ' ').toUpperCase()}</div></div>`;
+                listHtml += `<div style="display:flex; align-items:center; gap:8px;"><span style="color:var(--danger); font-weight:bold;">-${amt.toFixed(2)}</span>`;
+                listHtml += `<button class="edit-btn" onclick="editPastExpense(${i})">✏️</button>`;
+                listHtml += `<button class="edit-btn" onclick="deleteExpense(${i}, 'archive')">🗑️</button></div></div>`; 
             }); 
+
+            let headHtml = `
+                <div style="background:var(--vault-bg); padding:12px; border-radius:8px; border:1px solid var(--panel-border); margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
+                        <span style="color:var(--text-muted);">Daily Pacing Limit:</span>
+                        <strong style="color:var(--text);">${limit.toFixed(2)} ${sym}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
+                        <span style="color:var(--text-muted);">Total Spent (All Wallets):</span>
+                        <strong style="color:var(--danger);">${totalDailySpend.toFixed(2)} ${sym}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px; border-top:1px dashed var(--panel-border); padding-top:8px; margin-top:4px;">
+                        <span style="color:var(--text-muted);">End-of-Day Surplus:</span>
+                        <strong style="color:${surplus >= 0 ? 'var(--success)' : 'var(--danger)'}; font-size:14px;">
+                            ${surplus >= 0 ? '+' : ''}${surplus.toFixed(2)} ${sym}
+                        </strong>
+                    </div>
+                </div>
+            `;
+            
+            h = headHtml + listHtml;
         }
         
         document.getElementById('tmList').innerHTML = h || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No expenses logged for this date.</div>';
@@ -3775,7 +3803,6 @@
         document.getElementById('btnToggleTMForm').style.display = 'block'; 
         document.getElementById('tmFormContainer').style.display = 'none';
     }
-    
     function toggleTMForm() { 
         let el = document.getElementById('tmFormContainer'); 
         el.style.display = el.style.display === 'none' ? 'block' : 'none'; 
