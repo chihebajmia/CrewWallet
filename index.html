@@ -3758,15 +3758,26 @@
         let h = '';
         
         if (arch) { 
-            let totalDailySpend = 0;
+            // 1. Establish the True Limit (with a fallback for old corrupted V30 dates)
             let limit = parseFloat(arch.limit) || 0;
-            let surplus = parseFloat(arch.surplus) || 0;
+            if (limit === 0) limit = (s.mode === 'vacation') ? 35 : 7.25; 
+
+            let totalDailySpend = 0;
+            let dynamicSurplus = limit; 
             let sym = s.mode === 'vacation' ? 'TND' : 'USD';
 
             let listHtml = '';
+            
+            // 2. Reconstruct the exact math dynamically
             (arch.logs || []).forEach((item, i) => { 
                 let amt = parseFloat(item.amount) || 0; 
                 totalDailySpend += amt;
+                
+                if (!item.bypassLimit) {
+                    dynamicSurplus -= amt;
+                } else if (parseFloat(item.spillover) > 0) {
+                    dynamicSurplus += parseFloat(item.spillover);
+                }
                 
                 listHtml += `<div class="history-item">`;
                 listHtml += `<div><strong>${item.desc || 'Expense'}</strong><span class="cat-badge">${item.category || 'N/A'}</span>`;
@@ -3775,6 +3786,10 @@
                 listHtml += `<button class="edit-btn" onclick="editPastExpense(${i})">✏️</button>`;
                 listHtml += `<button class="edit-btn" onclick="deleteExpense(${i}, 'archive')">🗑️</button></div></div>`; 
             }); 
+
+            // 3. Silently heal the database variable in memory so future edits calculate cleanly
+            arch.limit = limit;
+            arch.surplus = dynamicSurplus;
 
             let headHtml = `
                 <div style="background:var(--vault-bg); padding:12px; border-radius:8px; border:1px solid var(--panel-border); margin-bottom:15px;">
@@ -3788,8 +3803,8 @@
                     </div>
                     <div style="display:flex; justify-content:space-between; font-size:12px; border-top:1px dashed var(--panel-border); padding-top:8px; margin-top:4px;">
                         <span style="color:var(--text-muted);">End-of-Day Surplus:</span>
-                        <strong style="color:${surplus >= 0 ? 'var(--success)' : 'var(--danger)'}; font-size:14px;">
-                            ${surplus >= 0 ? '+' : ''}${surplus.toFixed(2)} ${sym}
+                        <strong style="color:${dynamicSurplus >= 0 ? 'var(--success)' : 'var(--danger)'}; font-size:14px;">
+                            ${dynamicSurplus >= 0 ? '+' : ''}${dynamicSurplus.toFixed(2)} ${sym}
                         </strong>
                     </div>
                 </div>
@@ -3803,6 +3818,7 @@
         document.getElementById('btnToggleTMForm').style.display = 'block'; 
         document.getElementById('tmFormContainer').style.display = 'none';
     }
+
     function toggleTMForm() { 
         let el = document.getElementById('tmFormContainer'); 
         el.style.display = el.style.display === 'none' ? 'block' : 'none'; 
