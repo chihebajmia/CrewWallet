@@ -953,6 +953,7 @@
                         </div>
 
                         <div class="input-row" style="margin-top:6px;">
+                            <input type="date" id="tmSpecificDate" class="input-field" style="margin-bottom:10px;">
                             <input type="text" id="tmTag" class="flex-main" placeholder="What?">
                             <input type="number" id="tmAmount" class="flex-side" placeholder="Cost" oninput="toggleFXOverride('tm')">
                             <button class="expand-btn" onclick="let el = document.getElementById('advTM'); el.style.display = el.style.display === 'flex' ? 'none' : 'flex'; toggleFXOverride('tm');">⚙️</button>
@@ -3821,13 +3822,20 @@
 
     function toggleTMForm() { 
         let el = document.getElementById('tmFormContainer'); 
-        el.style.display = el.style.display === 'none' ? 'block' : 'none'; 
+        if (el.style.display === 'none') {
+            el.style.display = 'block';
+            let curD = document.getElementById('tmDate').value;
+            if (document.getElementById('tmSpecificDate')) document.getElementById('tmSpecificDate').value = curD;
+        } else {
+            el.style.display = 'none'; 
+        }
     }
     
     function editPastExpense(i) {
         tmEditIndex = i; 
         let item = tmCurrentDayObj.logs[i];
         
+        if (document.getElementById('tmSpecificDate')) document.getElementById('tmSpecificDate').value = tmCurrentDayObj.date;
         document.getElementById('tmTag').value = item.desc || ''; 
         document.getElementById('tmAmount').value = item.amount || '';
         document.getElementById('tmCategory').value = item.category || 'Uncategorized'; 
@@ -3843,6 +3851,7 @@
     function cancelTMEdit() { 
         tmEditIndex = -1; 
         document.getElementById('tmEditBanner').style.display = 'none'; 
+        if (document.getElementById('tmSpecificDate')) document.getElementById('tmSpecificDate').value = '';
         document.getElementById('tmTag').value = ''; 
         document.getElementById('tmAmount').value = ''; 
         document.getElementById('tmActualDeduct').value = '';
@@ -3851,6 +3860,9 @@
     }
     
     function logPastExpense() {
+        let targetDateStr = document.getElementById('tmSpecificDate') ? document.getElementById('tmSpecificDate').value : document.getElementById('tmDate').value;
+        if (!targetDateStr) return;
+
         let desc = document.getElementById('tmTag').value; 
         let amt = parseFloat(document.getElementById('tmAmount').value);
         let cat = document.getElementById('tmCategory').value; 
@@ -3862,8 +3874,11 @@
         
         if (!desc || isNaN(amt) || amt <= 0) return;
         
+        let oldItem = (tmEditIndex > -1 && tmCurrentDayObj) ? tmCurrentDayObj.logs[tmEditIndex] : null;
+        let logTime = oldItem ? oldItem.time : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
         let newItem = { 
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+            time: logTime, 
             desc: desc, 
             amount: amt, 
             category: cat, 
@@ -3872,45 +3887,62 @@
             actualDeduct: actualDeduct,
             shipping: ship,
             tax: tax,
-            location: document.getElementById('tmLocation').value 
+            location: document.getElementById('tmLocation').value,
+            bypassLimit: oldItem ? oldItem.bypassLimit : false,
+            spillover: oldItem ? oldItem.spillover : 0
         };
         
-        let surplusImpact = 0;
-        let oldItem = null;
+        let fx = parseFloat(s.fx_rate) || 2.923;
+        let adjustCapital = (impact) => {
+            if (s.mode === 'vacation') s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + impact;
+            else s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + (impact * fx);
+        };
 
-        if (tmEditIndex > -1 && tmCurrentDayObj) { 
-            oldItem = tmCurrentDayObj.logs[tmEditIndex];
+        if (oldItem) { 
             let oldAmt = parseFloat(oldItem.amount) || 0; 
-            tmCurrentDayObj.logs[tmEditIndex] = newItem; 
-            surplusImpact = oldAmt - amt; 
-            tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact; 
-        } else { 
-            if (!tmCurrentDayObj) {
-                let dStr = document.getElementById('tmDate').value; 
-                let lim = parseFloat(s.history[s.mode].limit) || 0;
-                tmCurrentDayObj = {
-                    date: dStr,
-                    logs: [newItem],
-                    limit: lim,
-                    surplus: lim - amt
-                };
-                s.history[s.mode].archive.push(tmCurrentDayObj);
-                s.history[s.mode].archive.sort((a,b) => new Date(a.date) - new Date(b.date));
-                surplusImpact = tmCurrentDayObj.surplus;
-            } else {
-                tmCurrentDayObj.logs.unshift(newItem); 
-                surplusImpact = -amt; 
+            
+            if (targetDateStr === tmCurrentDayObj.date) {
+                // SAME DAY EDIT
+                tmCurrentDayObj.logs[tmEditIndex] = newItem; 
+                let surplusImpact = oldAmt - amt;
                 tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact; 
+                adjustCapital(surplusImpact);
+            } else {
+                // TIME SHIFT PROTOCOL
+                tmCurrentDayObj.logs.splice(tmEditIndex, 1);
+                tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + oldAmt;
+                adjustCapital(oldAmt); 
+                
+                let targetDayObj = s.history[s.mode].archive.find(x => x.date === targetDateStr);
+                if (!targetDayObj) {
+                    let lim = parseFloat(s.history[s.mode].limit) || 0;
+                    targetDayObj = { date: targetDateStr, logs: [newItem], limit: lim, surplus: lim - amt };
+                    s.history[s.mode].archive.push(targetDayObj);
+                    s.history[s.mode].archive.sort((a,b) => new Date(a.date) - new Date(b.date));
+                    adjustCapital(targetDayObj.surplus);
+                } else {
+                    targetDayObj.logs.unshift(newItem);
+                    targetDayObj.surplus = (parseFloat(targetDayObj.surplus) || 0) - amt;
+                    adjustCapital(-amt);
+                }
+            }
+        } else { 
+            // NEW PAST EXPENSE
+            let targetDayObj = s.history[s.mode].archive.find(x => x.date === targetDateStr);
+            if (!targetDayObj) {
+                let lim = parseFloat(s.history[s.mode].limit) || 0;
+                targetDayObj = { date: targetDateStr, logs: [newItem], limit: lim, surplus: lim - amt };
+                s.history[s.mode].archive.push(targetDayObj);
+                s.history[s.mode].archive.sort((a,b) => new Date(a.date) - new Date(b.date));
+                adjustCapital(targetDayObj.surplus);
+            } else {
+                targetDayObj.logs.unshift(newItem); 
+                targetDayObj.surplus = (parseFloat(targetDayObj.surplus) || 0) - amt; 
+                adjustCapital(-amt);
             }
         }
-        
-        let fx = parseFloat(s.fx_rate) || 2.923;
-        if (s.mode === 'vacation') {
-            s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + surplusImpact;
-        } else {
-            s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + (surplusImpact * fx);
-        }
 
+        // --- WALLET AND PROJECT SYNCHRONIZATION ---
         let targetWallet = wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : wallet;
         let deductAmt = (!isNaN(actualDeduct) && actualDeduct > 0) ? actualDeduct : (amt + ship + tax);
 
@@ -3919,7 +3951,6 @@
             let oldDeduct = (!isNaN(oldItem.actualDeduct) && oldItem.actualDeduct > 0) ? oldItem.actualDeduct : ((parseFloat(oldItem.amount)||0) + (parseFloat(oldItem.shipping)||0) + (parseFloat(oldItem.tax)||0));
             if (s.vault[oldWallet] !== undefined) s.vault[oldWallet] += oldDeduct; 
             
-            // --- SYNC OLD ENVELOPE / MISSION MATH ---
             if (oldItem.project && oldItem.project !== 'none') {
                 let pType = oldItem.project.substring(0, 3);
                 let pKey = oldItem.project.substring(4);
@@ -3927,9 +3958,9 @@
                 if (pObj) pObj.spent = Math.max(0, (parseFloat(pObj.spent) || 0) - (parseFloat(oldItem.amount) || 0));
             }
         }
+        
         if (s.vault[targetWallet] !== undefined) s.vault[targetWallet] -= deductAmt; 
         
-        // --- SYNC NEW ENVELOPE / MISSION MATH ---
         if (proj && proj !== 'none') {
             let pType = proj.substring(0, 3);
             let pKey = proj.substring(4);
@@ -3939,6 +3970,9 @@
 
         saveState(); 
         cancelTMEdit(); 
+        
+        // Auto-follow the expense to the new date view!
+        document.getElementById('tmDate').value = targetDateStr;
         loadPastDay();
     }
     
