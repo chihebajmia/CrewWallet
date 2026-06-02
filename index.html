@@ -2918,62 +2918,104 @@
     // 9. ANALYTICS RENDERING (PROJECTS, VAPES, CHARTS)
     // ==========================================
     function renderProjects() {
-        // Envelopes & Missions
+        let archHtml = '';
+
+        // Helper for Envelopes & Missions
         let generateHTML = (obj, prefix) => {
-            let html = ''; 
+            let actHtml = '';
             Object.keys(obj || {}).forEach(k => {
-                let p = obj[k]; 
-                let spt = parseFloat(p.spent) || 0; 
+                let p = obj[k];
+                let spt = parseFloat(p.spent) || 0;
                 let tgt = parseFloat(p.target) || 0;
                 let pct = tgt > 0 ? Math.min((spt / tgt) * 100, 100) : 0;
-                
-                html += `<div class="vault-item" style="text-align:left; border:${p.archived ? '1px dashed #64748b' : '1px solid var(--panel-border)'};">`;
-                html += `<div style="display:flex; justify-content:space-between; align-items:center;">`;
-                html += `<strong>${p.name || 'Untitled'} ${p.archived ? '(Archived)' : ''}</strong>`;
-                
-                html += `<div style="display:flex; gap:8px;">`;
+                let typeLabel = prefix === 'env' ? 'Envelope' : 'Mission';
+
+                let h = `<div class="vault-item" style="text-align:left; border:${p.archived ? '1px dashed #64748b' : '1px solid var(--panel-border)'};">`;
+                h += `<div style="display:flex; justify-content:space-between; align-items:center;">`;
+                h += `<strong>${p.name || 'Untitled'} ${p.archived ? `(${typeLabel})` : ''}</strong>`;
+
+                h += `<div style="display:flex; gap:8px;">`;
                 if (!p.archived) {
-                    html += `<button onclick="archiveProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--warning); cursor:pointer;">Archive</button>`;
+                    h += `<button onclick="editProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--success); cursor:pointer;">Edit</button>`;
+                    h += `<button onclick="archiveProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--warning); cursor:pointer;">Archive</button>`;
                 } else {
-                    html += `<button onclick="deleteProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Delete</button>`;
+                    h += `<button onclick="deleteProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Delete</button>`;
                 }
-                html += `</div></div>`;
-                
-                html += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
-                html += `<div class="progress-bar" style="width:${pct}%; background:${pct >= 100 ? 'var(--danger)' : 'var(--accent)'};"></div></div>`;
-                html += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${spt.toFixed(2)} / ${tgt.toFixed(2)} ${p.currency}</div></div>`;
-            }); 
-            return html;
+                h += `</div></div>`;
+
+                h += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
+                h += `<div class="progress-bar" style="width:${pct}%; background:${pct >= 100 ? 'var(--danger)' : 'var(--accent)'};"></div></div>`;
+                h += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${spt.toFixed(2)} / ${tgt.toFixed(2)} ${p.currency}</div></div>`;
+
+                // Route to respective containers
+                if (p.archived) archHtml += h;
+                else actHtml += h;
+            });
+            return actHtml;
         };
-        
-        document.getElementById('envelopeContainer').innerHTML = generateHTML(s.projects.envelopes, 'env');
-        document.getElementById('missionContainer').innerHTML = generateHTML(s.projects.missions, 'mis');
+
+        document.getElementById('envelopeContainer').innerHTML = generateHTML(s.projects.envelopes, 'env') || '<div style="font-size:11px; color:var(--text-muted);">No active envelopes.</div>';
+        document.getElementById('missionContainer').innerHTML = generateHTML(s.projects.missions, 'mis') || '<div style="font-size:11px; color:var(--text-muted);">No active missions.</div>';
 
         // Goals & Locked Buffers
-        let gHtml = ''; 
+        let gHtml = '';
         (s.projects.goals || []).forEach((g, i) => {
-            let svd = parseFloat(g.saved) || 0; 
+            let svd = parseFloat(g.saved) || 0;
             let tgt = parseFloat(g.target) || 0;
             let pct = tgt > 0 ? Math.min((svd / tgt) * 100, 100) : 0;
-            
-            gHtml += `<div class="vault-item" style="text-align:left; border:1px solid var(--panel-border);">`;
-            gHtml += `<div style="display:flex; justify-content:space-between; align-items:center;">`;
-            gHtml += `<strong>${g.name || 'Untitled'}</strong>`;
-            
-            gHtml += `<div style="display:flex; gap:8px;">`;
-            if (g.lockedFromRunway || (g.name && g.name.includes("🛡️"))) {
-                gHtml += `<button onclick="deleteBuffer(${i})" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Unlock & Delete</button>`;
+
+            let h = `<div class="vault-item" style="text-align:left; border:${g.archived ? '1px dashed #64748b' : '1px solid var(--panel-border)'};">`;
+            h += `<div style="display:flex; justify-content:space-between; align-items:center;">`;
+            h += `<strong>${g.name || 'Untitled'} ${g.archived ? '(Goal)' : ''}</strong>`;
+
+            h += `<div style="display:flex; gap:8px;">`;
+            if (g.archived) {
+                h += `<button onclick="deleteGoal(${i})" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Delete</button>`;
+            } else if (g.lockedFromRunway || (g.name && g.name.includes("🛡️"))) {
+                h += `<button onclick="editProject('goal', ${i})" style="background:none; border:none; font-size:10px; color:var(--success); cursor:pointer;">Edit</button>`;
+                h += `<button onclick="addGoalFunds(${i})" style="background:none; border:none; font-size:10px; color:#38bdf8; cursor:pointer;">Fund</button>`;
+                h += `<button onclick="deleteBuffer(${i})" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Unlock</button>`;
             } else {
-                gHtml += `<button onclick="addGoalFunds(${i})" style="background:none; border:none; font-size:10px; color:var(--success); cursor:pointer;">Edit</button>`;
-                gHtml += `<button onclick="deleteGoal(${i})" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Delete</button>`;
+                h += `<button onclick="editProject('goal', ${i})" style="background:none; border:none; font-size:10px; color:var(--success); cursor:pointer;">Edit</button>`;
+                h += `<button onclick="addGoalFunds(${i})" style="background:none; border:none; font-size:10px; color:#38bdf8; cursor:pointer;">Fund</button>`;
+                h += `<button onclick="archiveProject('goal', ${i})" style="background:none; border:none; font-size:10px; color:var(--warning); cursor:pointer;">Archive</button>`;
+                h += `<button onclick="deleteGoal(${i})" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Delete</button>`;
             }
-            gHtml += `</div></div>`;
-            
-            gHtml += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
-            gHtml += `<div class="progress-bar" style="width:${pct}%; background:var(--success);"></div></div>`;
-            gHtml += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${svd.toFixed(2)} / ${tgt.toFixed(2)} ${g.currency}</div></div>`;
+            h += `</div></div>`;
+
+            h += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
+            h += `<div class="progress-bar" style="width:${pct}%; background:var(--success);"></div></div>`;
+            h += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${svd.toFixed(2)} / ${tgt.toFixed(2)} ${g.currency}</div></div>`;
+
+            // Route to respective containers
+            if (g.archived) archHtml += h;
+            else gHtml += h;
         });
-        document.getElementById('goalsContainer').innerHTML = gHtml;
+
+        document.getElementById('goalsContainer').innerHTML = gHtml || '<div style="font-size:11px; color:var(--text-muted);">No active goals.</div>';
+        document.getElementById('archiveSection').innerHTML = archHtml || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No archived trackers.</div>';
+    }
+
+    async function editProject(type, id) {
+        let p = null;
+        if (type === 'env') p = s.projects.envelopes[id];
+        if (type === 'mis') p = s.projects.missions[id];
+        if (type === 'goal') p = s.projects.goals[id];
+
+        if (!p) return;
+
+        let newName = await openUPrompt("Edit Name", "Enter new name for this tracker:", p.name);
+        if (newName === null) return;
+        if (newName.trim() !== '') p.name = newName.trim();
+
+        let newTarget = await openUPrompt("Edit Target Limit", `Current: ${p.target} ${p.currency}\nEnter new limit:`, p.target);
+        if (newTarget === null) return;
+        let nTgt = parseFloat(newTarget);
+        if (!isNaN(nTgt) && nTgt >= 0) {
+            p.target = nTgt;
+        }
+
+        saveState();
     }
 
     async function archiveProject(type, id) {
@@ -2981,6 +3023,7 @@
         if (c) {
             if (type === 'env') s.projects.envelopes[id].archived = true;
             if (type === 'mis') s.projects.missions[id].archived = true;
+            if (type === 'goal') s.projects.goals[id].archived = true;
             saveState();
         }
     }
@@ -3005,8 +3048,6 @@
     async function deleteBuffer(index) {
         let c = await openUConfirm("Unlock Buffer", "Delete this locked buffer and return the funds to your Liquid Runway?");
         if (c) {
-            // Because the buffer is an on-the-fly mathematical earmark, deleting it 
-            // instantly restores the funds to the Liquid Runway pacing algorithm.
             s.projects.goals.splice(index, 1);
             saveState();
         }
@@ -3017,7 +3058,7 @@
         let currentSaved = parseFloat(g.saved) || 0;
         
         let val = await openUPrompt(
-            "Update Goal / Buffer", 
+            "Update Saved Funds", 
             `Current: ${currentSaved.toFixed(2)} ${g.currency}\nEnter new TOTAL saved:`, 
             currentSaved.toFixed(2)
         );
@@ -3030,7 +3071,7 @@
             } 
         }
     }
-
+    
     function renderVapeStats() {
         let totalSpend = 0;
         let estDevices = 0;
