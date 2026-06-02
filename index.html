@@ -1723,22 +1723,25 @@
         if (s.missions) { s.projects.missions = s.missions; delete s.missions; }
         if (s.goals) { s.projects.goals = s.goals; delete s.goals; }
 
-        // 2. FIX V37 IOUS (Map 'name' -> 'who', 'amount' -> 'amt')
+        // 2. MODERNIZE IOUS (Map legacy 'who'/'name' -> 'agent', 'amt' -> 'amount')
         ['payables', 'receivables'].forEach(type => {
             (s.ious[type] || []).forEach(iou => {
-                if (iou.name !== undefined) { iou.who = iou.name; delete iou.name; }
-                if (iou.amount !== undefined) { iou.amt = iou.amount; delete iou.amount; }
-                iou.amt = parseFloat(iou.amt) || 0;
+                if (iou.who !== undefined) { iou.agent = iou.who; delete iou.who; }
+                if (iou.name !== undefined) { iou.agent = iou.name; delete iou.name; }
+                if (iou.amt !== undefined) { iou.amount = iou.amt; delete iou.amt; }
+                iou.amount = parseFloat(iou.amount) || 0;
+                if (!iou.agent) iou.agent = "Unknown";
             });
         });
 
-        // 3. FIX V37 INCOME (Map 'amount' -> 'amt', 'source' -> 'src', 'details' -> 'det')
+        // 3. MODERNIZE INCOME (Map legacy 'amt' -> 'amount', 'src' -> 'source', 'det' -> 'desc')
         if (!s.income_logs) s.income_logs = [];
         s.income_logs.forEach(inc => {
-            if (inc.amount !== undefined) { inc.amt = inc.amount; delete inc.amount; }
-            if (inc.source !== undefined) { inc.src = inc.source; delete inc.source; }
-            if (inc.details !== undefined) { inc.det = inc.details; delete inc.details; }
-            inc.amt = parseFloat(inc.amt) || 0;
+            if (inc.amt !== undefined) { inc.amount = inc.amt; delete inc.amt; }
+            if (inc.src !== undefined) { inc.source = inc.src; delete inc.src; }
+            if (inc.det !== undefined) { inc.desc = inc.det; delete inc.det; }
+            if (inc.details !== undefined) { inc.desc = inc.details; delete inc.details; }
+            inc.amount = parseFloat(inc.amount) || 0;
         });
 
         // 4. FIX V37 EXPENSE LOGS & TIME MACHINE DATES
@@ -3235,23 +3238,23 @@
     // 10. DEBT UI & IOU LEDGERS
     // ==========================================
 
-        function renderIOUs() {
+    function renderIOUs() {
         let pH = ''; 
         (s.ious.payables || []).forEach((p, i) => { 
-            let amt = parseFloat(p.amt) || 0;
+            let amt = parseFloat(p.amount) || 0;
             let cur = p.currency || 'TND';
             pH += `<div class="iou-item">`;
-            pH += `<div><strong style="color:var(--warning);">${p.who || 'Unknown'}</strong><div style="font-size:10px; color:var(--text-muted);">${p.desc || ''}</div></div>`;
+            pH += `<div><strong style="color:var(--warning);">${p.agent || 'Unknown'}</strong><div style="font-size:10px; color:var(--text-muted);">${p.desc || ''}</div></div>`;
             pH += `<div><span style="color:var(--warning); font-weight:bold; margin-right:10px;">${amt.toFixed(2)} ${cur}</span><button class="iou-btn" onclick="openResolveIOU('payable', ${i})">Settle</button></div></div>`; 
         });
         document.getElementById('payablesList').innerHTML = pH || '<div style="font-size:11px; color:var(--text-muted);">No payables. You are clear.</div>';
         
         let rH = ''; 
         (s.ious.receivables || []).forEach((r, i) => { 
-            let amt = parseFloat(r.amt) || 0;
+            let amt = parseFloat(r.amount) || 0;
             let cur = r.currency || 'TND';
             rH += `<div class="iou-item">`;
-            rH += `<div><strong style="color:var(--success);">${r.who || 'Unknown'}</strong><div style="font-size:10px; color:var(--text-muted);">${r.desc || ''}</div></div>`;
+            rH += `<div><strong style="color:var(--success);">${r.agent || 'Unknown'}</strong><div style="font-size:10px; color:var(--text-muted);">${r.desc || ''}</div></div>`;
             rH += `<div><span style="color:var(--success); font-weight:bold; margin-right:10px;">${amt.toFixed(2)} ${cur}</span><button class="iou-btn" onclick="openResolveIOU('receivable', ${i})">Collect</button></div></div>`; 
         });
         document.getElementById('receivablesList').innerHTML = rH || '<div style="font-size:11px; color:var(--text-muted);">No receivables.</div>';
@@ -3305,14 +3308,14 @@
             else if (!isIouUSD && isWalletUSD) amtToApply = amt / fx;
 
             if (type === 'payable') {
-                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) + amtToApply; // I borrowed, so my wallet grows
+                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) + amtToApply; 
             } else {
                 if ((parseFloat(s.vault[wallet]) || 0) < amtToApply) return alert("Insufficient funds in selected wallet.");
-                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) - amtToApply; // I lent, so my wallet shrinks
+                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) - amtToApply; 
             }
         }
 
-        s.ious[type + "s"].push({ who: who, amt: amt, currency: cur, desc: desc });
+        s.ious[type + "s"].push({ agent: who, amount: amt, currency: cur, desc: desc });
         saveState();
         document.getElementById('iouModal').style.display = 'none';
     }
@@ -3320,7 +3323,7 @@
     function openResolveIOU(type, i) {
         let iou = s.ious[type + "s"][i];
         let cur = iou.currency || 'TND';
-        let amt = parseFloat(iou.amt) || 0;
+        let amt = parseFloat(iou.amount) || 0;
         
         document.getElementById('resIouType').value = type;
         document.getElementById('resIouIndex').value = i;
@@ -3335,13 +3338,13 @@
         if (type === 'payable') {
             titleEl.innerText = "💸 Settle Payable";
             titleEl.style.color = "var(--warning)";
-            msgEl.innerText = `You are paying back ${amt.toFixed(2)} ${cur} to ${iou.who}.`;
+            msgEl.innerText = `You are paying back ${amt.toFixed(2)} ${cur} to ${iou.agent}.`;
             lblEl.innerText = "Deduct this payment from a wallet?";
             btnEl.style.background = "var(--warning)";
         } else {
             titleEl.innerText = "📥 Collect Receivable";
             titleEl.style.color = "var(--success)";
-            msgEl.innerText = `You are collecting ${amt.toFixed(2)} ${cur} from ${iou.who}.`;
+            msgEl.innerText = `You are collecting ${amt.toFixed(2)} ${cur} from ${iou.agent}.`;
             lblEl.innerText = "Add these received funds to a wallet?";
             btnEl.style.background = "var(--success)";
         }
@@ -3356,7 +3359,7 @@
         let wallet = document.getElementById('resIouWalletSelect').value;
         
         let iou = s.ious[type + "s"][i];
-        let amt = parseFloat(iou.amt) || 0;
+        let amt = parseFloat(iou.amount) || 0;
         let cur = iou.currency || 'TND';
         
         if (affect) {
@@ -3370,9 +3373,9 @@
 
             if (type === 'payable') {
                 if ((parseFloat(s.vault[wallet]) || 0) < amtToApply) return alert("Insufficient funds to pay this debt.");
-                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) - amtToApply; // I paid it back, wallet shrinks
+                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) - amtToApply; 
             } else {
-                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) + amtToApply; // I got my money back, wallet grows
+                s.vault[wallet] = (parseFloat(s.vault[wallet]) || 0) + amtToApply; 
             }
         }
         
@@ -3648,11 +3651,12 @@
         if (isNaN(a) || a <= 0) return;
         
         if (src === 'borrow') {
-            s.ious.payables.push({ who: det || 'Unknown', amt: a, desc: 'Borrowed funds into ' + w });
+            let iouCurrency = s.mode === 'vacation' ? 'TND' : 'USD';
+            s.ious.payables.push({ agent: det || 'Unknown', amount: a, currency: iouCurrency, desc: 'Borrowed funds into ' + w });
         }
         
         s.vault[w] = (parseFloat(s.vault[w]) || 0) + a; 
-        s.income_logs.unshift({ date: new Date().toLocaleDateString(), amt: a, src: src, wallet: w, det: det });
+        s.income_logs.unshift({ date: new Date().toLocaleDateString('en-CA'), amount: a, source: src, wallet: w, desc: det });
         
         saveState(); 
         document.getElementById('incomeModal').style.display = 'none';
@@ -3661,9 +3665,9 @@
     function renderIncomeLogs() {
         let h = ''; 
         (s.income_logs || []).forEach(i => { 
-            let amt = parseFloat(i.amt) || 0; 
+            let amt = parseFloat(i.amount) || 0; 
             h += `<div class="history-item">`;
-            h += `<div><strong>${i.det || i.src}</strong><div class="history-details">${i.date} | Dep: ${i.wallet}</div></div>`;
+            h += `<div><strong>${i.desc || i.source}</strong><div class="history-details">${i.date} | Dep: ${i.wallet.replace('_', ' ').toUpperCase()}</div></div>`;
             h += `<div><span style="color:var(--success); font-weight:bold;">+${amt.toFixed(2)}</span></div></div>`; 
         });
         document.getElementById('incomeList').innerHTML = h || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No income logged yet.</div>';
