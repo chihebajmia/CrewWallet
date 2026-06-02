@@ -719,9 +719,19 @@
                     
                     <select id="advCategory" onchange="handleCategoryChange('advCategory')"></select>
                     
-                    <div id="advVapeQtyBox" style="display:none; margin-top:4px;">
-                        <input type="number" id="advVapeQty" placeholder="How many vapes did you buy?" style="border-color:#a855f7;" inputmode="numeric">
-                    </div>
+                   <div id="advVapeQtyBox" style="display:none; flex-direction:column; gap:8px; margin-top:8px; padding:10px; border:1px dashed #a855f7; border-radius:8px; background:rgba(168, 85, 247, 0.1);">
+    <div style="font-size:10px; color:#a855f7; font-weight:bold;">💨 Vape Asset Details</div>
+    <input type="number" id="advVapeQty" placeholder="Total quantity bought (e.g., 2)" style="border-color:#a855f7;" inputmode="numeric">
+    <div style="display:flex; gap:8px;">
+        <input type="text" id="advVapeBrand" placeholder="Brand (e.g., Elfbar)" style="border-color:#a855f7; flex:1;">
+        <input type="text" id="advVapeFlavor" placeholder="Flavor (e.g., Mint)" style="border-color:#a855f7; flex:1;">
+    </div>
+    <div style="display:flex; gap:8px;">
+        <input type="number" id="advVapePuffs" placeholder="Puffs (e.g., 5000)" style="border-color:#a855f7; flex:1;" inputmode="numeric">
+        <input type="number" id="advVapeML" placeholder="Volume ML (e.g., 12)" style="border-color:#a855f7; flex:1;" inputmode="decimal">
+    </div>
+</div>
+
                     
                     <input type="text" id="advLocation" placeholder="📍 Location" enterkeyhint="done">
                     <input type="text" id="advItems" placeholder="🛒 Exact items" enterkeyhint="done">
@@ -993,9 +1003,19 @@
 
                             <select id="tmCategory" onchange="handleCategoryChange('tmCategory')"></select>
                             
-                            <div id="tmVapeQtyBox" style="display:none; margin-top:4px;">
-                                <input type="number" id="tmVapeQty" placeholder="How many vapes?" style="border-color:#a855f7;" inputmode="numeric">
-                            </div>
+                            <div id="tmVapeQtyBox" style="display:none; flex-direction:column; gap:8px; margin-top:8px; padding:10px; border:1px dashed #a855f7; border-radius:8px; background:rgba(168, 85, 247, 0.1);">
+    <div style="font-size:10px; color:#a855f7; font-weight:bold;">💨 Vape Asset Details</div>
+    <input type="number" id="tmVapeQty" placeholder="Total quantity bought (e.g., 2)" style="border-color:#a855f7;" inputmode="numeric">
+    <div style="display:flex; gap:8px;">
+        <input type="text" id="tmVapeBrand" placeholder="Brand (e.g., Elfbar)" style="border-color:#a855f7; flex:1;">
+        <input type="text" id="tmVapeFlavor" placeholder="Flavor (e.g., Mint)" style="border-color:#a855f7; flex:1;">
+    </div>
+    <div style="display:flex; gap:8px;">
+        <input type="number" id="tmVapePuffs" placeholder="Puffs (e.g., 5000)" style="border-color:#a855f7; flex:1;" inputmode="numeric">
+        <input type="number" id="tmVapeML" placeholder="Volume ML (e.g., 12)" style="border-color:#a855f7; flex:1;" inputmode="decimal">
+    </div>
+</div>
+
 
                             <input type="text" id="tmLocation" placeholder="📍 Location">
                             <input type="text" id="tmItems" placeholder="🛒 Exact items">
@@ -1815,7 +1835,41 @@
         if (s.settings.vacationEnd === undefined) s.settings.vacationEnd = "2026-08-02";
         if (s.settings.vacationFundTarget === undefined) s.settings.vacationFundTarget = 2557;
 
-        if (!s.vape_stash) s.vape_stash = { count: 0, empty_logs: [] };
+                // --- VAPE STASH UPGRADE (V38.3) ---
+        if (!s.vape_stash) s.vape_stash = { count: 0, empty_logs: [], inventory: [] };
+        if (!s.vape_stash.inventory) {
+            s.vape_stash.inventory = [];
+            
+            // 1. Migrate the Graveyard (Old empty_logs)
+            (s.vape_stash.empty_logs || []).forEach((ts, i) => {
+                s.vape_stash.inventory.push({
+                    id: 'legacy_dead_' + i + '_' + ts,
+                    status: 'dead',
+                    brand: 'Legacy Unit',
+                    flavor: 'Needs Details',
+                    puffs: '',
+                    ml: '',
+                    opened_ts: ts - (4 * 86400000), // Estimates it was opened 4 days before dying
+                    killed_ts: ts
+                });
+            });
+            
+            // 2. Migrate the Live Stash (Current count)
+            let currentCount = parseInt(s.vape_stash.count) || 0;
+            for(let i = 0; i < currentCount; i++) {
+                s.vape_stash.inventory.push({
+                    id: 'legacy_live_' + i + '_' + Date.now(),
+                    status: i === 0 ? 'active' : 'sealed', // Assumes 1 is active, the rest are backups
+                    brand: 'Legacy Unit',
+                    flavor: 'Needs Details',
+                    puffs: '',
+                    ml: '',
+                    opened_ts: i === 0 ? Date.now() - 86400000 : null,
+                    killed_ts: null
+                });
+            }
+        }
+
         if (!s.custom_categories) s.custom_categories = [];
         
         if (s.capital_saved_tnd === undefined) {
