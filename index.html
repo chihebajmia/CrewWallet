@@ -3974,16 +3974,64 @@ function processPaycheck() {
         document.getElementById('incomeModal').style.display = 'none';
     }
     
-    function renderIncomeLogs() {
-        let h = ''; 
-        (s.income_logs || []).forEach(i => { 
-            let amt = parseFloat(i.amount) || 0; 
-            h += `<div class="history-item">`;
-            h += `<div><strong>${i.desc || i.source}</strong><div class="history-details">${i.date} | Dep: ${i.wallet.replace('_', ' ').toUpperCase()}</div></div>`;
-            h += `<div><span style="color:var(--success); font-weight:bold;">+${amt.toFixed(2)}</span></div></div>`; 
-        });
-        document.getElementById('incomeList').innerHTML = h || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No income logged yet.</div>';
+function renderIncomeLogs() {
+    let h = ''; 
+    (s.income_logs || []).forEach((i, idx) => { 
+        let amt = parseFloat(i.amount) || 0; 
+        h += `<div class="history-item">`;
+        h += `<div><strong>${i.desc || i.source}</strong><div class="history-details">${i.date} | Dep: ${i.wallet.replace('_', ' ').toUpperCase()}</div></div>`;
+        h += `<div style="display:flex; align-items:center; gap:8px;"><span style="color:var(--success); font-weight:bold;">+${amt.toFixed(2)}</span>`;
+        h += `<button class="edit-btn" onclick="deleteIncome(${idx})">🗑️</button></div></div>`; 
+    });
+    document.getElementById('incomeList').innerHTML = h || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No income logged yet.</div>';
+}
+
+    async function deleteIncome(index) {
+    let log = s.income_logs[index];
+    let c = await openUConfirm("Delete Income", "Delete this record and reverse its effect on your balances?");
+    if (!c) return;
+
+    // 1. REVERSE PAYCHECK & TRANSIT QUEUE
+    if (log.source === 'paycheck') {
+        let opMatch = log.desc.match(/Op: \$([0-9.]+)/);
+        let stbMatch = log.desc.match(/STB: \$([0-9.]+)/);
+        let savMatch = log.desc.match(/Sav: \$([0-9.]+)/);
+
+        let oA = opMatch ? parseFloat(opMatch[1]) : 0;
+        let lA = stbMatch ? parseFloat(stbMatch[1]) : 0;
+        let sA = savMatch ? parseFloat(savMatch[1]) : 0;
+
+        // Pull money back out of Brightwell
+        s.vault.brightwell = Math.max(0, (parseFloat(s.vault.brightwell) || 0) - oA);
+
+        // Yank the exact wires out of the Transit Queue
+        if (s.transit_queue) {
+            if (lA > 0) {
+                let tIdx = s.transit_queue.findIndex(w => w.type === 'stb' && Math.abs(w.amount - lA) < 0.01);
+                if (tIdx > -1) s.transit_queue.splice(tIdx, 1);
+            }
+            if (sA > 0) {
+                let tIdx = s.transit_queue.findIndex(w => w.type === 'savings' && Math.abs(w.amount - sA) < 0.01);
+                if (tIdx > -1) s.transit_queue.splice(tIdx, 1);
+            }
+        }
+    } 
+    // 2. REVERSE WIRE SETTLEMENTS
+    else if (log.wallet === 'STB Settlement') {
+        s.loan.arrears = (parseFloat(s.loan.arrears) || 0) + parseFloat(log.amount);
     }
+    // 3. REVERSE NORMAL INCOME
+    else if (s.vault[log.wallet] !== undefined) {
+        s.vault[log.wallet] = Math.max(0, (parseFloat(s.vault[log.wallet]) || 0) - parseFloat(log.amount));
+    }
+
+    // Erase the receipt
+    s.income_logs.splice(index, 1);
+    
+    // Save and refresh everything
+    saveState();
+}
+
 
     function openTransferModal() { 
         document.getElementById('trfAmount').value = ''; 
