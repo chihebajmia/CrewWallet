@@ -1033,8 +1033,18 @@
                 <div class="title" style="color:var(--success); border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">
                     💵 Income & Funding Ledger
                 </div>
-                <div class="history-card" style="margin-top:10px; max-height:200px; padding:8px;" id="incomeList"></div>
+                
+                <div style="margin-top:10px; font-size:11px; font-weight:bold; color:#38bdf8; padding-bottom:4px; border-bottom:1px dashed var(--panel-border);">
+                    🚢 Carnival Paychecks
+                </div>
+                <div id="paycheckList" style="margin-top:5px; margin-bottom:15px; max-height:180px; overflow-y:auto; padding-right:4px;"></div>
+
+                <div style="font-size:11px; font-weight:bold; color:var(--success); padding-bottom:4px; border-bottom:1px dashed var(--panel-border);">
+                    📥 Other Funding & Deposits
+                </div>
+                <div id="otherIncomeList" style="margin-top:5px; max-height:150px; overflow-y:auto; padding-right:4px;"></div>
             </div>
+
         </div>
 
         <div id="tab-settings" class="page-section">
@@ -3821,23 +3831,17 @@ function processPaycheck() {
     
     if (g <= 0) return alert("Enter a valid gross pay.");
 
-    // 1. Immediate Operational Funds to Brightwell
-    if (oA > 0) {
-        s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + oA;
-    }
+    if (oA > 0) s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + oA;
     
-    // 2. Route STB and Savings to the Transit Queue
+    // Tag the wires with a unique ID
+    let pId = 'pc_' + Date.now();
     if (!s.transit_queue) s.transit_queue = [];
-    if (lA > 0) {
-        s.transit_queue.push({ type: 'stb', amount: lA, date: new Date().toLocaleDateString('en-CA') });
-    }
-    if (sA > 0) {
-        s.transit_queue.push({ type: 'savings', amount: sA, date: new Date().toLocaleDateString('en-CA') });
-    }
+    if (lA > 0) s.transit_queue.push({ type: 'stb', amount: lA, date: new Date().toLocaleDateString('en-CA'), parentId: pId });
+    if (sA > 0) s.transit_queue.push({ type: 'savings', amount: sA, date: new Date().toLocaleDateString('en-CA'), parentId: pId });
     
-    // 3. Generate the Master Income Receipt
     let detailsStr = `Op: $${oA.toFixed(2)} (Cleared) | STB: $${lA.toFixed(2)} (Pending) | Sav: $${sA.toFixed(2)} (Pending)`;
     s.income_logs.unshift({ 
+        id: pId,
         date: new Date().toLocaleDateString('en-CA'), 
         amount: g, 
         source: 'paycheck', 
@@ -3849,6 +3853,7 @@ function processPaycheck() {
     document.getElementById('paycheckModal').style.display = 'none';
     if (document.getElementById('tab-time').classList.contains('active')) renderIncomeLogs();
 }
+
         function openTransitModal() {
         let h = '';
         (s.transit_queue || []).forEach((w, i) => {
@@ -3898,12 +3903,14 @@ function processPaycheck() {
         // Log Settlement Receipt with the analytical data
         let fxStr = `Bank Rate: ${bankFX.toFixed(3)} | Market: ${liveFX.toFixed(3)} | Spread Loss: ${fxSpreadLoss.toFixed(2)} TND`;
         s.income_logs.unshift({
+            parentId: w.parentId,
             date: new Date().toLocaleDateString('en-CA'),
             amount: exactTND,
             source: 'custom',
             wallet: w.type === 'stb' ? 'STB Settlement' : 'Savings',
             desc: `✅ Wire Settled: $${w.amount.toFixed(2)} -> ${exactTND.toFixed(2)} TND | ` + fxStr
         });
+
         
         s.transit_queue.splice(idx, 1);
         saveState();
@@ -3975,16 +3982,78 @@ function processPaycheck() {
     }
     
 function renderIncomeLogs() {
-    let h = ''; 
-    (s.income_logs || []).forEach((i, idx) => { 
-        let amt = parseFloat(i.amount) || 0; 
-        h += `<div class="history-item">`;
-        h += `<div><strong>${i.desc || i.source}</strong><div class="history-details">${i.date} | Dep: ${i.wallet.replace('_', ' ').toUpperCase()}</div></div>`;
-        h += `<div style="display:flex; align-items:center; gap:8px;"><span style="color:var(--success); font-weight:bold;">+${amt.toFixed(2)}</span>`;
-        h += `<button class="edit-btn" onclick="deleteIncome(${idx})">🗑️</button></div></div>`; 
+    let paychecks = [];
+    let settlements = [];
+    let others = [];
+
+    // Separate the logs and retain their exact database index for safe deletion
+    (s.income_logs || []).forEach((log, idx) => {
+        log._origIdx = idx; 
+        if (log.source === 'paycheck') {
+            paychecks.push(log);
+        } else if (log.desc && log.desc.includes('✅ Wire Settled') && log.parentId) {
+            // Only group NEW settlements that have a tracking ID
+            settlements.push(log);
+        } else {
+            // Old legacy settlements, side gigs, and manual deposits go here safely
+            others.push(log);
+        }
     });
-    document.getElementById('incomeList').innerHTML = h || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No income logged yet.</div>';
+
+    // Nest new settlements inside their parent paychecks
+    paychecks.forEach(p => p._settlements = []);
+    settlements.forEach(sLog => {
+        let parent = paychecks.find(p => p.id && p.id === sLog.parentId);
+        if (parent) parent._settlements.push(sLog);
+    });
+
+    // 1. Build the Paycheck Folders
+    let pHtml = '';
+    paychecks.forEach(p => {
+        let amt = parseFloat(p.amount) || 0;
+        pHtml += `<div class="history-item" style="flex-direction:column; align-items:stretch; cursor:pointer;" onclick="document.getElementById('settlements_${p._origIdx}').style.display = document.getElementById('settlements_${p._origIdx}').style.display === 'none' ? 'block' : 'none'">`;
+        pHtml += `  <div style="display:flex; justify-content:space-between; align-items:center;">`;
+        pHtml += `    <div><strong>${p.desc}</strong><div class="history-details">${p.date} | Tap to view wires</div></div>`;
+        pHtml += `    <div style="display:flex; align-items:center; gap:8px;">`;
+        pHtml += `      <span style="color:#38bdf8; font-weight:bold;">$${amt.toFixed(2)}</span>`;
+        pHtml += `      <button class="edit-btn" onclick="deleteIncome(${p._origIdx}); event.stopPropagation();">🗑️</button>`;
+        pHtml += `    </div>`;
+        pHtml += `  </div>`;
+        
+        // The Hidden Wires Folder
+        if (p._settlements && p._settlements.length > 0) {
+            pHtml += `  <div id="settlements_${p._origIdx}" style="display:none; margin-top:8px; padding-top:8px; border-top:1px dashed var(--panel-border); margin-left:10px;">`;
+            p._settlements.forEach(sLog => {
+                let sAmt = parseFloat(sLog.amount) || 0;
+                pHtml += `    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; background:rgba(15,23,42,0.3); padding:8px; border-radius:6px;">`;
+                pHtml += `      <div><span style="font-size:10px; color:var(--text);">${sLog.desc}</span><div class="history-details">${sLog.date}</div></div>`;
+                pHtml += `      <div style="display:flex; align-items:center; gap:8px;">`;
+                pHtml += `        <span style="color:var(--success); font-size:10px; font-weight:bold;">+${sAmt.toFixed(2)} TND</span>`;
+                pHtml += `        <button class="edit-btn" onclick="deleteIncome(${sLog._origIdx}); event.stopPropagation();" style="font-size:11px;">🗑️</button>`;
+                pHtml += `      </div>`;
+                pHtml += `    </div>`;
+            });
+            pHtml += `  </div>`;
+        }
+        pHtml += `</div>`;
+    });
+    document.getElementById('paycheckList').innerHTML = pHtml || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No paychecks logged yet.</div>';
+
+    // 2. Build the Other Income List
+    let oHtml = '';
+    others.forEach(o => {
+        let amt = parseFloat(o.amount) || 0;
+        oHtml += `<div class="history-item">`;
+        oHtml += `  <div><strong>${o.desc || o.source}</strong><div class="history-details">${o.date} | Dep: ${(o.wallet||'').replace('_', ' ').toUpperCase()}</div></div>`;
+        oHtml += `  <div style="display:flex; align-items:center; gap:8px;">`;
+        oHtml += `    <span style="color:var(--success); font-weight:bold;">+${amt.toFixed(2)}</span>`;
+        oHtml += `    <button class="edit-btn" onclick="deleteIncome(${o._origIdx})">🗑️</button>`;
+        oHtml += `  </div>`;
+        oHtml += `</div>`;
+    });
+    document.getElementById('otherIncomeList').innerHTML = oHtml || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No other income logged.</div>';
 }
+
 
 async function deleteIncome(index) {
     let log = s.income_logs[index];
@@ -4035,10 +4104,11 @@ async function deleteIncome(index) {
             s.transit_queue.push({
                 type: type,
                 amount: origUSD,
-                date: log.date
+                date: log.date,
+                parentId: log.parentId
             });
         }
-    } 
+
     // 3. REVERSE NORMAL INCOME
     else {
         let targetWallet = log.wallet ? log.wallet.toLowerCase() : '';
