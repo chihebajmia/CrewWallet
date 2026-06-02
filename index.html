@@ -953,11 +953,17 @@
                         </div>
 
                         <div class="input-row" style="margin-top:6px;">
-                            <input type="date" id="tmSpecificDate" class="input-field" style="margin-bottom:10px;">
-                            <input type="text" id="tmTag" class="flex-main" placeholder="What?">
-                            <input type="number" id="tmAmount" class="flex-side" placeholder="Cost" oninput="toggleFXOverride('tm')">
-                            <button class="expand-btn" onclick="let el = document.getElementById('advTM'); el.style.display = el.style.display === 'flex' ? 'none' : 'flex'; toggleFXOverride('tm');">⚙️</button>
-                            <button class="btn-action" onclick="logPastExpense()">Save</button>
+<div style="width:100%; margin-bottom:8px;">
+    <label style="font-size:10px; color:var(--text-muted); margin-bottom:4px; display:block;">Target Date:</label>
+    <input type="date" id="tmSpecificDate" class="input-field" style="width:100%; box-sizing:border-box;">
+</div>
+<div style="display:flex; gap:8px; width:100%;">
+    <input type="text" id="tmTag" class="flex-main" placeholder="What?">
+    <input type="number" id="tmAmount" class="flex-side" placeholder="Cost" oninput="toggleFXOverride('tm')">
+    <button class="expand-btn" onclick="let el = document.getElementById('advTM'); el.style.display = el.style.display === 'flex' ? 'none' : 'flex'; toggleFXOverride('tm');">⚙️</button>
+    <button class="btn-action" onclick="logPastExpense()">Save</button>
+</div>
+
                         </div>
                         
                         <div class="advanced-context-box" id="advTM">
