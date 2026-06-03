@@ -1641,7 +1641,22 @@
             <div id="transitSettleForm" style="display:none; margin-top:15px; border-top:1px dashed var(--panel-border); padding-top:15px;">
                 <div style="font-size:11px; color:var(--success); margin-bottom:8px; font-weight:bold;" id="tsTitle">Settling...</div>
                 <input type="hidden" id="tsIndex">
-                <input type="number" id="tsExactTND" placeholder="Exact TND received in bank" style="width:100%; border-color:var(--success);" inputmode="decimal">
+                                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;">
+                    <div id="tndSettlementFields" style="display:none; flex-direction:column; gap:8px;">
+                        <label style="font-size:10px; color:var(--text-muted); font-weight:bold;">EXACT TND RECEIVED IN BANK:</label>
+                        <input type="number" id="tsExactTND" placeholder="0.00" style="border-color:var(--success);" inputmode="decimal">
+                        
+                        <label style="font-size:10px; color:var(--text-muted); font-weight:bold;">MARKET REFERENCE FX RATE AT ENROUTE TIMELINE:</label>
+                        <input type="number" id="tsMarketFX" placeholder="e.g. 2.915" style="border-color:var(--accent);" inputmode="decimal">
+                    </div>
+                    
+                    <label style="font-size:10px; color:var(--text-muted); font-weight:bold;">FIXED BANK FEES CHARGED (USD $):</label>
+                    <input type="number" id="tsFixedFee" placeholder="0.00" style="border-color:var(--danger);" inputmode="decimal" value="0">
+                    
+                    <label style="font-size:10px; color:var(--text-muted); font-weight:bold;">EXACT ARRIVAL DATE:</label>
+                    <input type="date" id="tsArrivalDate" style="color-scheme: dark; border-color:#38bdf8;">
+                </div>
+
                 <div class="modal-btn-row">
                     <button class="btn-secondary" onclick="document.getElementById('transitSettleForm').style.display='none'">Cancel</button>
                     <button class="v-btn" style="background:var(--success);" onclick="confirmSettleWire()">Confirm Settlement</button>
@@ -1940,6 +1955,26 @@
         }
 
         if (!s.custom_categories) s.custom_categories = [];
+                if (!s.history.transfers) s.history.transfers = [];
+
+        // Business Days Calculator (Strips out weekends)
+        window.calculateBusinessDays = function(startDateStr, endDateStr) {
+            let start = new Date(startDateStr);
+            let end = new Date(endDateStr);
+            if (isNaN(start) || isNaN(end)) return 1;
+            
+            let count = 0;
+            let cur = new Date(start);
+            while (cur <= end) {
+                let day = cur.getDay();
+                if (day !== 0 && day !== 6) { // Skip Sunday (0) and Saturday (6)
+                    count++;
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+            return Math.max(1, count - 1); // Exclude the initiation day itself for velocity
+        };
+
         if (!s.transit_queue) s.transit_queue = [];
 
         if (s.capital_saved_tnd === undefined) {
@@ -3186,6 +3221,51 @@ if(document.getElementById('advVapeBrand')) {
             </div>`;
         }
         document.getElementById('trendOutput').innerHTML = trendAlerts;
+                    // --- STEP 5: PIPELINE FRICTION & ASSET VELOCITY TRACKER ---
+        let routesToTrack = ["Brightwell ➔ STB", "Brightwell ➔ Savings TND", "Brightwell ➔ Wise", "Wise ➔ IBKR"];
+        let tableHTML = `<div style="margin-top:12px; background:rgba(255,255,255,0.02); border:1px solid var(--panel-border); border-radius:8px; overflow:hidden; font-size:11px;">
+            <table style="width:100%; border-collapse:collapse; text-align:left;">
+                <thead>
+                    <tr style="background:rgba(255,255,255,0.05); color:var(--text-muted); font-size:9px; text-transform:uppercase; letter-spacing:0.5px;">
+                        <th style="padding:8px;">Pipeline Route</th>
+                        <th style="padding:8px; text-align:center;">⏱️ Speed</th>
+                        <th style="padding:8px; text-align:right;">💸 Drag (Fee/FX)</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        routesToTrack.forEach(route => {
+            let matches = (s.history.transfers || []).filter(t => t.route === route);
+            if(matches.length === 0) {
+                tableHTML += `<tr style="border-top:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:8px; color:var(--text-muted); font-weight:bold;">${route}</td>
+                    <td style="padding:8px; text-align:center; color:var(--text-muted); font-style:italic;">No logs</td>
+                    <td style="padding:8px; text-align:right; color:var(--text-muted); font-style:italic;">--</td>
+                </tr>`;
+            } else {
+                let avgDays = matches.reduce((sum, t) => sum + t.days, 0) / matches.length;
+                let avgFee = matches.reduce((sum, t) => sum + t.fee, 0) / matches.length;
+                let avgLoss = matches.reduce((sum, t) => sum + t.spreadLoss, 0) / matches.length;
+                let lastTransfer = matches[matches.length - 1];
+
+                let dragDetails = `$${avgFee.toFixed(2)} Fee`;
+                if(lastTransfer.bankFX) {
+                    dragDetails = `Mkt: ${lastTransfer.marketFX.toFixed(2)} vs Bnk: ${lastTransfer.bankFX.toFixed(2)} (Avg Loss: ${avgLoss.toFixed(0)} TND)`;
+                }
+
+                tableHTML += `<tr style="border-top:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:8px; color:var(--text); font-weight:bold;">${route}</td>
+                    <td style="padding:8px; text-align:center; color:var(--accent); font-weight:bold;">${avgDays.toFixed(1)} Days</td>
+                    <td style="padding:8px; text-align:right; color:var(--danger); font-size:10px;">${dragDetails}</td>
+                </tr>`;
+            }
+        });
+
+        tableHTML += `</tbody></table></div>`;
+        
+        // Append this gorgeous table directly into the Trend Output dashboard container
+        document.getElementById('trendOutput').innerHTML += tableHTML;
+
     }
 
         function runWealthAllocator() {
@@ -4083,10 +4163,12 @@ function processPaycheck() {
             let col = w.type === 'stb' ? 'var(--danger)' : 'var(--success)';
             h += `<div class="iou-item" style="border-color:${col};">
                     <div><strong style="color:${col};">${lbl}</strong><div style="font-size:9px; color:var(--text-muted);">Initiated: ${w.date}</div></div>
-                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
                         <span style="font-weight:bold;">$${w.amount.toFixed(2)}</span>
+                        <button class="edit-btn" onclick="removePendingWire(${i})" style="margin-right: 4px;">🗑️</button>
                         <button class="iou-btn" onclick="initSettleWire(${i})">Settle</button>
                     </div>
+
                   </div>`;
         });
         document.getElementById('transitList').innerHTML = h || '<div style="font-size:11px; text-align:center; color:var(--text-muted);">No pending wires.</div>';
@@ -4094,46 +4176,106 @@ function processPaycheck() {
         document.getElementById('transitModal').style.display = 'flex';
     }
 
-    function initSettleWire(index) {
+        function initSettleWire(index) {
         let w = s.transit_queue[index];
         document.getElementById('tsIndex').value = index;
-        document.getElementById('tsTitle').innerText = `Settling $${w.amount.toFixed(2)} -> ${w.type === 'stb' ? 'STB' : 'Savings'}`;
-        document.getElementById('tsExactTND').value = '';
+        document.getElementById('tsTitle').innerText = `Settling $${w.amount.toFixed(2)} [${w.route || w.type.toUpperCase()}]`;
+        document.getElementById('tsArrivalDate').value = new Date().toLocaleDateString('en-CA');
+        document.getElementById('tsFixedFee').value = "0";
+        
+        let tndBox = document.getElementById('tndSettlementFields');
+        if (w.type === 'stb' || w.type === 'savings') {
+            tndBox.style.display = 'flex';
+            document.getElementById('tsExactTND').value = '';
+            document.getElementById('tsMarketFX').value = (parseFloat(s.fx_rate) || 2.923).toFixed(3);
+        } else {
+            tndBox.style.display = 'none';
+        }
         document.getElementById('transitSettleForm').style.display = 'block';
     }
 
     function confirmSettleWire() {
         let idx = parseInt(document.getElementById('tsIndex').value);
         let w = s.transit_queue[idx];
-        let exactTND = parseFloat(document.getElementById('tsExactTND').value);
         
-        if (isNaN(exactTND) || exactTND <= 0) return alert("Enter exact TND amount credited to your bank.");
+        let arrivalDate = document.getElementById('tsArrivalDate').value;
+        let fixedFeeUSD = parseFloat(document.getElementById('tsFixedFee').value) || 0;
+        let exactTND = parseFloat(document.getElementById('tsExactTND').value) || 0;
+        let marketFX = parseFloat(document.getElementById('tsMarketFX').value) || parseFloat(s.fx_rate) || 2.923;
         
-        // Analytical Bonus: Calculate the true FX Spread
-        let liveFX = parseFloat(s.fx_rate) || 2.923;
-        let bankFX = exactTND / w.amount;
-        let expectedTND = w.amount * liveFX;
-        let fxSpreadLoss = expectedTND - exactTND;
-        
-        // Apply to exact vaults
-        if (w.type === 'stb') {
-            s.loan.arrears = Math.max(0, (parseFloat(s.loan.arrears) || 0) - exactTND);
-        } else {
-            s.vault.savings = (parseFloat(s.vault.savings) || 0) + exactTND;
+        if (!arrivalDate) return alert("Please select a valid arrival date.");
+        if ((w.type === 'stb' || w.type === 'savings') && (isNaN(exactTND) || exactTND <= 0)) {
+            return alert("Enter exact TND amount credited to your bank account.");
         }
-        
-        // Log Settlement Receipt with the analytical data
-        let fxStr = `Bank Rate: ${bankFX.toFixed(3)} | Market: ${liveFX.toFixed(3)} | Spread Loss: ${fxSpreadLoss.toFixed(2)} TND`;
-        s.income_logs.unshift({
-            parentId: w.parentId,
-            date: new Date().toLocaleDateString('en-CA'),
-            amount: exactTND,
-            source: 'custom',
-            wallet: w.type === 'stb' ? 'STB Settlement' : 'Savings',
-            desc: `✅ Wire Settled: $${w.amount.toFixed(2)} -> ${exactTND.toFixed(2)} TND | ` + fxStr
+
+        // 1. Calculate Asset Velocity (Business Days only)
+        let businessDays = window.calculateBusinessDays(w.date, arrivalDate);
+
+        // 2. Add fixed fees to your legacy tracking variable
+        s.vault.lifetime_fees = (parseFloat(s.vault.lifetime_fees) || 0) + fixedFeeUSD;
+
+        let bankFX = 0; let fxSpreadLoss = 0;
+        let routeName = w.route || `${w.type.toUpperCase()} Pipeline`;
+
+        if (w.type === 'stb' || w.type === 'savings') {
+            // Net calculation after deducting front-end fixed asset fees
+            let netUSDConverted = w.amount - fixedFeeUSD;
+            bankFX = exactTND / netUSDConverted;
+            
+            let expectedTNDWithMarketRate = netUSDConverted * marketFX;
+            fxSpreadLoss = expectedTNDWithMarketRate - exactTND;
+
+            if (w.type === 'stb') {
+                s.loan.arrears = Math.max(0, (parseFloat(s.loan.arrears) || 0) - exactTND);
+                routeName = "Brightwell ➔ STB";
+            } else {
+                s.vault.savings = (parseFloat(s.vault.savings) || 0) + exactTND;
+                routeName = "Brightwell ➔ Savings TND";
+            }
+        } else {
+            // USD to USD Transfers (Wise or IBKR)
+            let netUSDReceived = w.amount - fixedFeeUSD;
+            if (w.type === 'wise') { s.vault.wise = (parseFloat(s.vault.wise) || 0) + netUSDReceived; routeName = "Brightwell ➔ Wise"; }
+            if (w.type === 'ibkr') { s.vault.ibkr_cash = (parseFloat(s.vault.ibkr_cash) || 0) + netUSDReceived; s.vault.ibkr = (parseFloat(s.vault.ibkr) || 0) + netUSDReceived; routeName = "Wise ➔ IBKR"; }
+        }
+            async function removePendingWire(index) {
+        let w = s.transit_queue[index];
+        let c = await openUConfirm("Cancel Pending Wire", `Wipe this pending $${w.amount.toFixed(2)} transfer? \n\nNote: If this was a custom Wise/IBKR sweep, you will need to manually re-add the balance to your source wallet via Setup.`);
+        if (c) {
+            s.transit_queue.splice(index, 1);
+            saveState();
+            openTransitModal();
+            if (s.transit_queue.length === 0) document.getElementById('transitModal').style.display = 'none';
+        }
+    }
+
+
+        // 3. Archive inside our permanent pipeline efficiency ledger
+        if (!s.history.transfers) s.history.transfers = [];
+        s.history.transfers.push({
+            route: routeName,
+            days: businessDays,
+            fee: fixedFeeUSD,
+            marketFX: (w.type === 'stb' || w.type === 'savings') ? marketFX : null,
+            bankFX: (w.type === 'stb' || w.type === 'savings') ? bankFX : null,
+            spreadLoss: fxSpreadLoss
         });
 
+        // 4. Log detailed description receipt to income timeline ledger
+        let receiptDesc = `✅ Settle: ${routeName} | Duration: ${businessDays} Biz Days | Fee: $${fixedFeeUSD.toFixed(2)}`;
+        if (w.type === 'stb' || w.type === 'savings') {
+            receiptDesc += ` | Market Rate: ${marketFX.toFixed(3)} | Bank Rate: ${bankFX.toFixed(3)} | Spread Loss: ${fxSpreadLoss.toFixed(1)} TND`;
+        }
         
+        s.income_logs.unshift({
+            parentId: w.parentId,
+            date: arrivalDate,
+            amount: (w.type === 'stb' || w.type === 'savings') ? exactTND : w.amount,
+            source: 'custom',
+            wallet: (w.type === 'stb') ? 'STB Settlement' : w.type.toUpperCase(),
+            desc: receiptDesc
+        });
+
         s.transit_queue.splice(idx, 1);
         saveState();
         openTransitModal(); 
@@ -4141,6 +4283,7 @@ function processPaycheck() {
         if (s.transit_queue.length === 0) document.getElementById('transitModal').style.display = 'none';
         if (document.getElementById('tab-time').classList.contains('active')) renderIncomeLogs();
     }
+
 
 
     function openSTBModal() { 
@@ -4809,7 +4952,7 @@ async function deleteIncome(index) {
         document.getElementById('sweepModal').style.display = 'flex'; 
     }
 
-    function processSweep() {
+        function processSweep() {
         let a = parseFloat(document.getElementById('swAmount').value); 
         let w = document.getElementById('swSource').value;
         
@@ -4817,30 +4960,50 @@ async function deleteIncome(index) {
             return alert("Invalid sweep or insufficient funds.");
         }
         
+        // Deduct from source immediately, place into transit queue instead of instant teleportation
         s.vault[w] = (parseFloat(s.vault[w]) || 0) - a; 
-        s.vault.ibkr_cash = (parseFloat(s.vault.ibkr_cash) || 0) + a; 
-        s.vault.ibkr = (parseFloat(s.vault.ibkr) || 0) + a;
+        
+        if (!s.transit_queue) s.transit_queue = [];
+        s.transit_queue.push({
+            type: 'ibkr',
+            route: `${w.toUpperCase()} ➔ IBKR`,
+            amount: a,
+            date: new Date().toLocaleDateString('en-CA'),
+            parentId: 'sweep_' + Date.now()
+        });
         
         saveState(); 
         document.getElementById('sweepModal').style.display = 'none';
+        alert(" Sweep initiated! Funds are now tracking in your Pending Transit Queue.");
     }
 
     function vaultWise() {
-        let c = prompt("1: Add funds to Wise\n2: Withdraw from Wise"); 
+        let c = prompt("1: Initiate Brightwell ➔ Wise Transfer\n2: Sync Physical Cash ➔ Wise"); 
         if (!c) return;
         
         let a = parseFloat(prompt("Amount (USD):")); 
         if (isNaN(a) || a <= 0) return;
         
         if (c === '1') { 
-            s.vault.wise = (parseFloat(s.vault.wise) || 0) + a; 
-            s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) - a; 
+            if ((parseFloat(s.vault.brightwell) || 0) < a) return alert("Insufficient Brightwell balance.");
+            s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) - a;
+            
+            if (!s.transit_queue) s.transit_queue = [];
+            s.transit_queue.push({
+                type: 'wise',
+                route: 'BRIGHTWELL ➔ WISE',
+                amount: a,
+                date: new Date().toLocaleDateString('en-CA'),
+                parentId: 'wise_' + Date.now()
+            });
+            alert(" Transfer initiated! Tracking speed in Pending Wires.");
         } else if (c === '2') { 
             s.vault.wise = (parseFloat(s.vault.wise) || 0) - a; 
             s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) + a; 
         }
         saveState();
     }
+
     
     function vaultExchange() {
         let amtStr = prompt("Exchange Amount:\nHow much PHYSICAL CASH are you handing over?");
