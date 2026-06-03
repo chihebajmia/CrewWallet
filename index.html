@@ -4238,17 +4238,6 @@ function processPaycheck() {
             if (w.type === 'wise') { s.vault.wise = (parseFloat(s.vault.wise) || 0) + netUSDReceived; routeName = "Brightwell ➔ Wise"; }
             if (w.type === 'ibkr') { s.vault.ibkr_cash = (parseFloat(s.vault.ibkr_cash) || 0) + netUSDReceived; s.vault.ibkr = (parseFloat(s.vault.ibkr) || 0) + netUSDReceived; routeName = "Wise ➔ IBKR"; }
         }
-            async function removePendingWire(index) {
-        let w = s.transit_queue[index];
-        let c = await openUConfirm("Cancel Pending Wire", `Wipe this pending $${w.amount.toFixed(2)} transfer? \n\nNote: If this was a custom Wise/IBKR sweep, you will need to manually re-add the balance to your source wallet via Setup.`);
-        if (c) {
-            s.transit_queue.splice(index, 1);
-            saveState();
-            openTransitModal();
-            if (s.transit_queue.length === 0) document.getElementById('transitModal').style.display = 'none';
-        }
-    }
-
 
         // 3. Archive inside our permanent pipeline efficiency ledger
         if (!s.history.transfers) s.history.transfers = [];
@@ -4283,6 +4272,18 @@ function processPaycheck() {
         if (s.transit_queue.length === 0) document.getElementById('transitModal').style.display = 'none';
         if (document.getElementById('tab-time').classList.contains('active')) renderIncomeLogs();
     }
+
+    async function removePendingWire(index) {
+        let w = s.transit_queue[index];
+        let c = await openUConfirm("Cancel Pending Wire", `Wipe this pending $${w.amount.toFixed(2)} transfer? \n\nNote: If this was a custom Wise/IBKR sweep, you will need to manually re-add the balance to your source wallet via Setup.`);
+        if (c) {
+            s.transit_queue.splice(index, 1);
+            saveState();
+            openTransitModal();
+            if (s.transit_queue.length === 0) document.getElementById('transitModal').style.display = 'none';
+        }
+    }
+
 
 
 
