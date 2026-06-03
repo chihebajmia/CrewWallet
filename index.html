@@ -715,11 +715,19 @@
                         <option value="savings">🏦 Deduct from: Savings TND</option>
                     </select>
                     
-                    <div id="advFXOverrideBox" style="display:none; flex-direction:column; gap:6px; margin-top:4px; background:rgba(250, 204, 21, 0.15); padding:10px; border-radius:8px; border:1px solid var(--warning);">
+                                        <div id="advFXOverrideBox" style="display:none; flex-direction:column; gap:6px; margin-top:4px; background:rgba(250, 204, 21, 0.15); padding:10px; border-radius:8px; border:1px solid var(--warning);">
                         <label style="font-size:11px; color:var(--warning); font-weight:bold;">⚠️ Currency Mismatch Detected</label>
-                        <div style="font-size:9px; color:var(--text-muted); margin-bottom:2px;">Enter the exact amount your bank deducted.</div>
-                        <input type="number" id="advActualDeduct" placeholder="Exact bank charge" inputmode="decimal" style="border-color:var(--warning); background-color: rgba(15, 23, 42, 0.8); color:var(--text);">
+                        
+                        <select id="advCurrencyToggle" onchange="calculateLiveSpread('adv')" style="background: rgba(15, 23, 42, 0.8); color: white; border: 1px solid var(--warning); padding: 8px; border-radius: 8px; width: 100%; font-size:12px;">
+                            <option value="TND">Local Receipt (Paid in TND)</option>
+                            <option value="USD">Online/Foreign (Paid directly in USD)</option>
+                        </select>
+
+                        <div style="font-size:9px; color:var(--text-muted); margin-top:4px;">Enter the exact USD your bank deducted:</div>
+                        <input type="number" id="advActualDeduct" oninput="calculateLiveSpread('adv')" placeholder="Exact bank charge (USD)" inputmode="decimal" style="border-color:var(--warning); background-color: rgba(15, 23, 42, 0.8); color:var(--text);">
+                        <div id="advLiveFxRateDisplay" style="font-size: 10px; margin-top: 4px;"></div>
                     </div>
+
                     
                     <select id="advCategory" onchange="handleCategoryChange('advCategory')"></select>
                     
@@ -1022,9 +1030,17 @@
 
                             <div id="tmFXOverrideBox" style="display:none; flex-direction:column; gap:6px; margin-top:4px; background:rgba(250, 204, 21, 0.15); padding:10px; border-radius:8px; border:1px solid var(--warning);">
                                 <label style="font-size:11px; color:var(--warning); font-weight:bold;">⚠️ Currency Mismatch Detected</label>
-                                <div style="font-size:9px; color:var(--text-muted); margin-bottom:2px;">Enter the exact bank charge.</div>
-                                <input type="number" id="tmActualDeduct" placeholder="Exact charge" inputmode="decimal" style="border-color:var(--warning); background-color: rgba(15, 23, 42, 0.8); color:var(--text);">
+                                
+                                <select id="tmCurrencyToggle" onchange="calculateLiveSpread('tm')" style="background: rgba(15, 23, 42, 0.8); color: white; border: 1px solid var(--warning); padding: 8px; border-radius: 8px; width: 100%; font-size:12px;">
+                                    <option value="TND">Local Receipt (Paid in TND)</option>
+                                    <option value="USD">Online/Foreign (Paid directly in USD)</option>
+                                </select>
+
+                                <div style="font-size:9px; color:var(--text-muted); margin-top:4px;">Enter the exact USD your bank deducted:</div>
+                                <input type="number" id="tmActualDeduct" oninput="calculateLiveSpread('tm')" placeholder="Exact bank charge (USD)" inputmode="decimal" style="border-color:var(--warning); background-color: rgba(15, 23, 42, 0.8); color:var(--text);">
+                                <div id="tmLiveFxRateDisplay" style="font-size: 10px; margin-top: 4px;"></div>
                             </div>
+
 
                             <select id="tmCategory" onchange="handleCategoryChange('tmCategory')"></select>
                             
@@ -2963,7 +2979,7 @@
         toggleFXOverride(prefix);
     }
 
-    function toggleFXOverride(prefix) {
+        function toggleFXOverride(prefix) {
         let amt = parseFloat(document.getElementById(prefix === 'adv' ? 'customAmount' : 'tmAmount').value) || 0;
         let w = document.getElementById(prefix + 'SourceWallet').value;
         let box = document.getElementById(prefix + 'FXOverrideBox');
@@ -2983,7 +2999,32 @@
         
         let mismatch = (modeIsUSD && !wIsUSD && w !== 'default') || (!modeIsUSD && wIsUSD) || envDeductMatch;
         box.style.display = (mismatch && amt > 0) ? 'flex' : 'none';
+
+        if (mismatch && amt > 0) calculateLiveSpread(prefix);
     }
+
+    function calculateLiveSpread(prefix) {
+        let amt = parseFloat(document.getElementById(prefix === 'adv' ? 'customAmount' : 'tmAmount').value) || 0;
+        let deduct = parseFloat(document.getElementById(prefix + 'ActualDeduct').value) || 0;
+        let strat = document.getElementById(prefix + 'CurrencyToggle').value;
+        let display = document.getElementById(prefix + 'LiveFxRateDisplay');
+
+        if (strat === 'USD') {
+            display.innerHTML = `<span style="color:var(--text-muted)">Native USD transaction. No FX spread applied by bank.</span>`;
+            return;
+        }
+
+        if (amt > 0 && deduct > 0) {
+            let actualFx = (amt / deduct).toFixed(3);
+            let globalFx = parseFloat(s.fx_rate) || 2.923;
+            let spread = (((globalFx - actualFx) / globalFx) * 100).toFixed(1);
+            let color = actualFx < globalFx ? '#ef4444' : '#10b981';
+            display.innerHTML = `<span style="color:${color}">🏦 True Bank FX Rate: <b>${actualFx}</b> (Spread Loss: ${spread}%)</span>`;
+        } else {
+            display.innerHTML = '';
+        }
+    }
+
 
     function logExpense() {
         let desc = document.getElementById('customDescription').value;
@@ -2995,6 +3036,19 @@
         let proj = document.getElementById('advProject').value;
         let wallet = document.getElementById('advSourceWallet').value;
         let actualDeduct = parseFloat(document.getElementById('advActualDeduct').value);
+        let fxStrat = document.getElementById('advCurrencyToggle') ? document.getElementById('advCurrencyToggle').value : 'TND';
+        let bankFx = null;
+        
+        if (document.getElementById('advFXOverrideBox').style.display !== 'none') {
+            if (fxStrat === 'TND' && actualDeduct > 0 && amt > 0) {
+                bankFx = parseFloat((amt / actualDeduct).toFixed(3));
+            } else if (fxStrat === 'USD') {
+                actualDeduct = amt; // The entered amount is exactly what the bank charged
+                amt = amt * (parseFloat(s.fx_rate) || 2.923); // Convert ledger record to TND
+                bankFx = parseFloat(s.fx_rate) || 2.923;
+            }
+        }
+
         let ship = parseFloat(document.getElementById('advShipping').value) || 0; 
         let tax = parseFloat(document.getElementById('advTax').value) || 0;
         let loc = document.getElementById('advLocation').value; 
@@ -3088,6 +3142,7 @@
             spillover: spillover, 
             shipping: ship, 
             tax: tax, 
+            bankFx: bankFx,
             wallet: targetWallet, // Saves the actual wallet so refunds work later!
             actualDeduct: actualDeduct, 
             location: loc, 
@@ -3361,7 +3416,7 @@ if(document.getElementById('advVapeBrand')) {
         let archHtml = '';
 
         // Helper for Envelopes & Missions
-        let generateHTML = (obj, prefix) => {
+                let generateHTML = (obj, prefix) => {
             let actHtml = '';
             Object.keys(obj || {}).forEach(k => {
                 let p = obj[k];
@@ -3383,16 +3438,21 @@ if(document.getElementById('advVapeBrand')) {
                 }
                 h += `</div></div>`;
 
-                h += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
-                h += `<div class="progress-bar" style="width:${pct}%; background:${pct >= 100 ? 'var(--danger)' : 'var(--accent)'};"></div></div>`;
-                h += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${spt.toFixed(2)} / ${tgt.toFixed(2)} ${p.currency}</div></div>`;
+                // SMART RENDER: Check if it's an open mission (target = 0)
+                if (tgt === 0) {
+                    h += `<div style="font-size:10px; margin-top:8px; color:var(--text-muted);">Total Spent: <span style="color:#f8fafc; font-weight:bold;">${spt.toFixed(2)} ${p.currency}</span> <span style="color:#38bdf8;">(Open)</span></div></div>`;
+                } else {
+                    h += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
+                    h += `<div class="progress-bar" style="width:${pct}%; background:${pct >= 100 ? 'var(--danger)' : 'var(--accent)'};"></div></div>`;
+                    h += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${spt.toFixed(2)} / ${tgt.toFixed(2)} ${p.currency}</div></div>`;
+                }
 
-                // Route to respective containers
                 if (p.archived) archHtml += h;
                 else actHtml += h;
             });
             return actHtml;
         };
+
 
         document.getElementById('envelopeContainer').innerHTML = generateHTML(s.projects.envelopes, 'env') || '<div style="font-size:11px; color:var(--text-muted);">No active envelopes.</div>';
         document.getElementById('missionContainer').innerHTML = generateHTML(s.projects.missions, 'mis') || '<div style="font-size:11px; color:var(--text-muted);">No active missions.</div>';
@@ -4686,6 +4746,19 @@ async function deleteIncome(index) {
         let proj = document.getElementById('tmProject').value; 
         let wallet = document.getElementById('tmSourceWallet').value;
         let actualDeduct = parseFloat(document.getElementById('tmActualDeduct').value);
+        let fxStrat = document.getElementById('tmCurrencyToggle') ? document.getElementById('tmCurrencyToggle').value : 'TND';
+        let bankFx = null;
+
+        if (document.getElementById('tmFXOverrideBox').style.display !== 'none') {
+            if (fxStrat === 'TND' && actualDeduct > 0 && amt > 0) {
+                bankFx = parseFloat((amt / actualDeduct).toFixed(3));
+            } else if (fxStrat === 'USD') {
+                actualDeduct = amt;
+                amt = amt * (parseFloat(s.fx_rate) || 2.923);
+                bankFx = parseFloat(s.fx_rate) || 2.923;
+            }
+        }
+
         let ship = parseFloat(document.getElementById('tmShipping').value) || 0;
         let tax = parseFloat(document.getElementById('tmTax').value) || 0;
         
@@ -4715,6 +4788,7 @@ async function deleteIncome(index) {
             actualDeduct: actualDeduct,
             shipping: ship,
             tax: tax,
+            bankFx: bankFx,
             location: document.getElementById('tmLocation').value,
             bypassLimit: bypass, 
             spillover: oldItem ? oldItem.spillover : 0
