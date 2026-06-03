@@ -4691,8 +4691,19 @@ async function deleteIncome(index) {
         
         if (!desc || isNaN(amt) || amt <= 0) return;
         
-        let oldItem = (tmEditIndex > -1 && tmCurrentDayObj) ? tmCurrentDayObj.logs[tmEditIndex] : null;
+                let oldItem = (tmEditIndex > -1 && tmCurrentDayObj) ? tmCurrentDayObj.logs[tmEditIndex] : null;
         let logTime = oldItem ? oldItem.time : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // 1. DYNAMICALLY RECALCULATE BYPASS LIMIT
+        let bypass = false;
+        if (wallet !== 'default') bypass = true;
+        if (cat === '💨 Vape') bypass = true;
+        if (proj && proj !== 'none') {
+            let pType = proj.substring(0, 3);
+            let pKey = proj.substring(4);
+            let pObj = pType === 'env' ? s.projects.envelopes[pKey] : (pType === 'mis' ? s.projects.missions[pKey] : null);
+            if (pObj) bypass = pObj.bypass;
+        }
 
         let newItem = { 
             time: logTime, 
@@ -4705,7 +4716,7 @@ async function deleteIncome(index) {
             shipping: ship,
             tax: tax,
             location: document.getElementById('tmLocation').value,
-            bypassLimit: oldItem ? oldItem.bypassLimit : false,
+            bypassLimit: bypass, 
             spillover: oldItem ? oldItem.spillover : 0
         };
         
@@ -4715,49 +4726,57 @@ async function deleteIncome(index) {
             else s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + (impact * fx);
         };
 
+        // 2. TRUE EFFECTIVE DEDUCTION CALCULATOR
+        let getEffDeduct = (itm) => (!itm.bypassLimit ? (parseFloat(itm.amount) || 0) : (parseFloat(itm.spillover) || 0));
+
         if (oldItem) { 
-            let oldAmt = parseFloat(oldItem.amount) || 0; 
+            let oldEff = getEffDeduct(oldItem);
+            let newEff = getEffDeduct(newItem);
             
             if (targetDateStr === tmCurrentDayObj.date) {
                 // SAME DAY EDIT
                 tmCurrentDayObj.logs[tmEditIndex] = newItem; 
-                let surplusImpact = oldAmt - amt;
+                let surplusImpact = oldEff - newEff;
                 tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact; 
                 adjustCapital(surplusImpact);
             } else {
                 // TIME SHIFT PROTOCOL
                 tmCurrentDayObj.logs.splice(tmEditIndex, 1);
-                tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + oldAmt;
-                adjustCapital(oldAmt); 
+                tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + oldEff;
+                adjustCapital(oldEff); 
                 
                 let targetDayObj = s.history[s.mode].archive.find(x => x.date === targetDateStr);
                 if (!targetDayObj) {
                     let lim = parseFloat(s.history[s.mode].limit) || 0;
-                    targetDayObj = { date: targetDateStr, logs: [newItem], limit: lim, surplus: lim - amt };
+                    targetDayObj = { date: targetDateStr, logs: [newItem], limit: lim, surplus: lim - newEff };
                     s.history[s.mode].archive.push(targetDayObj);
                     s.history[s.mode].archive.sort((a,b) => new Date(a.date) - new Date(b.date));
                     adjustCapital(targetDayObj.surplus);
                 } else {
                     targetDayObj.logs.unshift(newItem);
-                    targetDayObj.surplus = (parseFloat(targetDayObj.surplus) || 0) - amt;
-                    adjustCapital(-amt);
+                    targetDayObj.surplus = (parseFloat(targetDayObj.surplus) || 0) - newEff;
+                    adjustCapital(-newEff);
                 }
             }
         } else { 
             // NEW PAST EXPENSE
+            let newEff = getEffDeduct(newItem);
             let targetDayObj = s.history[s.mode].archive.find(x => x.date === targetDateStr);
             if (!targetDayObj) {
                 let lim = parseFloat(s.history[s.mode].limit) || 0;
-                targetDayObj = { date: targetDateStr, logs: [newItem], limit: lim, surplus: lim - amt };
+                targetDayObj = { date: targetDateStr, logs: [newItem], limit: lim, surplus: lim - newEff };
                 s.history[s.mode].archive.push(targetDayObj);
                 s.history[s.mode].archive.sort((a,b) => new Date(a.date) - new Date(b.date));
                 adjustCapital(targetDayObj.surplus);
             } else {
                 targetDayObj.logs.unshift(newItem); 
-                targetDayObj.surplus = (parseFloat(targetDayObj.surplus) || 0) - amt; 
-                adjustCapital(-amt);
+                targetDayObj.surplus = (parseFloat(targetDayObj.surplus) || 0) - newEff; 
+                adjustCapital(-newEff);
             }
         }
+
+        // --- WALLET AND PROJECT SYNCHRONIZATION ---
+
 
         // --- WALLET AND PROJECT SYNCHRONIZATION ---
         let targetWallet = wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : wallet;
@@ -4821,12 +4840,14 @@ async function deleteIncome(index) {
             if (s.vault[refundWallet] !== undefined) s.vault[refundWallet] += refundAmt;
             s.history[s.mode].current.splice(i, 1); 
 
-        } else { 
-            let amt = parseFloat(item.amount) || 0;
-            tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + amt; 
-            surplusImpact = amt;
+            } else { 
+            let effRefund = (!item.bypassLimit) ? (parseFloat(item.amount) || 0) : (parseFloat(item.spillover) || 0);
+            
+            tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + effRefund; 
+            surplusImpact = effRefund;
 
             let fx = parseFloat(s.fx_rate) || 2.923;
+
             if (s.mode === 'vacation') {
                 s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + surplusImpact;
             } else {
