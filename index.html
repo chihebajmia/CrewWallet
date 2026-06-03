@@ -1949,29 +1949,23 @@
              s.loan.overdraft = 516.00;
         }
 
-        // 8. REPAIR PROJECT TYPES & FLAGS
-        Object.keys(s.projects.envelopes).forEach(k => { 
+                // 8. REPAIR PROJECT TYPES & FLAGS
+        Object.keys(s.projects.envelopes || {}).forEach(k => { 
             let e = s.projects.envelopes[k];
             if (e.archived === undefined) e.archived = false; 
             if (e.bypass === undefined) e.bypass = true;
             if (!e.currency) e.currency = 'TND';
-            
-            // BUG FIX: Map legacy "limit" to "target" so Earmarks work
             if (e.limit !== undefined && !e.target) { e.target = parseFloat(e.limit); delete e.limit; }
-            
             e.target = parseFloat(e.target) || 0;
             e.spent = parseFloat(e.spent) || 0;
         });
         
-        Object.keys(s.projects.missions).forEach(k => { 
+        Object.keys(s.projects.missions || {}).forEach(k => { 
             let m = s.projects.missions[k];
             if (m.archived === undefined) m.archived = false; 
             if (m.bypass === undefined) m.bypass = false;
             if (!m.currency) m.currency = 'TND';
-            
-            // BUG FIX: Map legacy "limit" to "target"
             if (m.limit !== undefined && !m.target) { m.target = parseFloat(m.limit); delete m.limit; }
-            
             m.target = parseFloat(m.target) || 0;
             m.spent = parseFloat(m.spent) || 0;
         });
@@ -1979,9 +1973,15 @@
         s.projects.goals.forEach(g => {
             if (!g.currency) g.currency = 'TND';
             if (g.lockedFromRunway === undefined) g.lockedFromRunway = false;
+            
+            // --- ADVANCED ANALYTICS EVOLUTION ---
+            if (!g.type) g.type = g.lockedFromRunway ? 'bridge' : 'standard'; 
+            if (g.targetDate === undefined) g.targetDate = '';
+            
             g.target = parseFloat(g.target) || 0;
             g.saved = parseFloat(g.saved) || 0;
         });
+
 
         // 9. EXECUTE MATHEMATICAL UPDATES
         processInterestBleed();
@@ -2865,10 +2865,21 @@
         if (t === 'mis') {
             s.projects.missions[id] = { name: n, target: l, spent: 0, currency: c, bypass: byp, trackLogistics: logi, archived: false };
         }
-        if (t === 'goal') {
+                if (t === 'goal') {
             let finalName = isLock ? ("🛡️ " + n) : n;
-            s.projects.goals.push({ id: id, name: finalName, target: l, saved: 0, currency: c, bypass: byp, lockedFromRunway: isLock });
+            s.projects.goals.push({ 
+                id: id, 
+                name: finalName, 
+                target: l, 
+                saved: 0, 
+                currency: c, 
+                bypass: byp, 
+                lockedFromRunway: isLock,
+                type: isLock ? 'bridge' : 'standard', // Dynamic baseline guess
+                targetDate: ''
+            });
         }
+
         
         saveState(); 
         document.getElementById('addProjectModal').style.display = 'none';
@@ -3156,26 +3167,47 @@ if(document.getElementById('advVapeBrand')) {
     }
 
     async function editProject(type, id) {
-        let p = null;
-        if (type === 'env') p = s.projects.envelopes[id];
-        if (type === 'mis') p = s.projects.missions[id];
-        if (type === 'goal') p = s.projects.goals[id];
+    let p = null;
+    if (type === 'env') p = s.projects.envelopes[id];
+    if (type === 'mis') p = s.projects.missions[id];
+    if (type === 'goal') p = s.projects.goals[id];
 
-        if (!p) return;
+    if (!p) return;
 
-        let newName = await openUPrompt("Edit Name", "Enter new name for this tracker:", p.name);
-        if (newName === null) return;
-        if (newName.trim() !== '') p.name = newName.trim();
+    let newName = await openUPrompt("Edit Name", "Enter new name for this tracker:", p.name);
+    if (newName === null) return;
+    if (newName.trim() !== '') p.name = newName.trim();
 
-        let newTarget = await openUPrompt("Edit Target Limit", `Current: ${p.target} ${p.currency}\nEnter new limit:`, p.target);
-        if (newTarget === null) return;
-        let nTgt = parseFloat(newTarget);
-        if (!isNaN(nTgt) && nTgt >= 0) {
-            p.target = nTgt;
+    let newTarget = await openUPrompt("Edit Target Limit", `Current: ${p.target} ${p.currency}\nEnter new limit:`, p.target);
+    if (newTarget === null) return;
+    let nTgt = parseFloat(newTarget);
+    if (!isNaN(nTgt) && nTgt >= 0) {
+        p.target = nTgt;
+    }
+
+    // --- ADVANCED ANALYTICS UPGRADE: GOAL TYPE & TIMELINE TIMING ---
+    if (type === 'goal') {
+        let typeMenu = "Select Goal Behavior Profile:\n1: Standard Savings Goal\n2: Bridge Buffer (Survival during Income Drought)\n3: Open Surplus (Investment Overflow)";
+        let choice = await openUPrompt("Edit Goal Classification", typeMenu, p.type === 'bridge' ? '2' : (p.type === 'open' ? '3' : '1'));
+        
+        if (choice !== null) {
+            if (choice === '1') { p.type = 'standard'; p.lockedFromRunway = false; }
+            if (choice === '2') { p.type = 'bridge'; p.lockedFromRunway = true; }
+            if (choice === '3') { p.type = 'open'; p.lockedFromRunway = false; }
         }
 
-        saveState();
+        if (p.type === 'bridge' || p.type === 'standard') {
+            let datePrompt = "Enter Target Achievement/Release Date (YYYY-MM-DD) or leave blank if none:";
+            let newDate = await openUPrompt("Edit Target Deadline", datePrompt, p.targetDate || '');
+            if (newDate !== null) p.targetDate = newDate.trim();
+        } else {
+            p.targetDate = '';
+        }
     }
+
+    saveState();
+}
+
 
     async function archiveProject(type, id) {
         let c = await openUConfirm("Archive", "Archive this tracker? It will be moved to the Archived folder.");
