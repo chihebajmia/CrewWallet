@@ -4458,7 +4458,21 @@ async function deleteIncome(index) {
                 parentId: log.parentId
             });
         }
-    } 
+
+        // === PIPELINE METRICS SYNC BLOCK ===
+        let routeName = "";
+        if (log.wallet === 'STB Settlement') routeName = "Brightwell ➔ STB";
+        else if (log.wallet === 'Savings' || log.wallet === 'savings') routeName = "Brightwell ➔ Savings TND";
+        else if (log.wallet === 'WISE' || log.wallet === 'wise') routeName = "Brightwell ➔ Wise";
+        else if (log.wallet === 'IBKR' || log.wallet === 'ibkr') routeName = "Wise ➔ IBKR";
+
+        if (s.history.transfers && routeName) {
+            let tIdx = s.history.transfers.map(t => t.route).lastIndexOf(routeName);
+            if (tIdx > -1) s.history.transfers.splice(tIdx, 1);
+        }
+        // ===================================
+    }
+
     else {
         let targetWallet = log.wallet ? log.wallet.toLowerCase() : '';
         if (s.vault[targetWallet] !== undefined) {
