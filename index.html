@@ -854,7 +854,18 @@
                 </div>
             </div>
 
-            
+                        <!-- BEHAVIORAL ENGINES -->
+            <div class="vault-card" style="border-color: #8b5cf6; margin-bottom: 10px; background: linear-gradient(145deg, #1e1b4b 0%, #2e1065 100%);">
+                <div class="title" style="color: #a78bfa; border-bottom: 1px dashed var(--panel-border); padding-bottom: 8px; margin-bottom: 8px;">
+                    🧠 Behavioral Analytics
+                </div>
+                <div style="font-size:10px; color:var(--text-muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:4px;">Runway Exhaustion Heatmap</div>
+                <div id="heatmapOutput"></div>
+                
+                <div style="font-size:10px; color:var(--text-muted); letter-spacing:1px; text-transform:uppercase; margin-top:16px; border-top: 1px dashed var(--panel-border); padding-top: 8px; margin-bottom:4px;">Micro-Trend Radar</div>
+                <div id="trendOutput"></div>
+            </div>
+
             <div class="vault-card clickable" style="border-color: rgba(74, 222, 128, 0.5); text-align: center; padding: 25px 15px;" onclick="toggleCapitalWaterfall()">
                 <div class="title" style="color: var(--success); justify-content:center;" id="uiCapitalSavedLbl">
                     Total Capital Saved
@@ -2118,6 +2129,7 @@
         if (tabId === 'dash') calculateBehavioralStreaks();
        if (tabId === 'analytics') { 
             runWealthAllocator();
+            renderBehavioralEngines();
             renderChart(30); 
             renderProjects(); 
             renderLeaderboard(); 
@@ -3099,7 +3111,83 @@ if(document.getElementById('advVapeBrand')) {
     // ==========================================
     // 9. ANALYTICS RENDERING (PROJECTS, VAPES, CHARTS)
     // ==========================================
-    
+        function renderBehavioralEngines() {
+        let daysOfWeek = [0,0,0,0,0,0,0]; // Sun-Sat
+        let countOfWeek = [0,0,0,0,0,0,0];
+        let cat7 = {}; let cat30 = {};
+        let now = Date.now();
+
+        // Parse Time Machine for both Heatmap and Trends
+        (s.history.vacation.archive || []).forEach(day => {
+            let d = new Date(day.date);
+            let dayIndex = d.getDay();
+            let diffDays = (now - d.getTime()) / 86400000;
+
+            if(!isNaN(dayIndex)) {
+                let dailyTotal = 0;
+                (day.logs || []).forEach(l => { 
+                    let amt = parseFloat(l.deductedAmount || l.amount || 0);
+                    dailyTotal += amt; 
+                    
+                    // Trend Radar Logic
+                    if(diffDays <= 30) {
+                        if(!cat30[l.category]) cat30[l.category] = 0;
+                        cat30[l.category] += amt;
+                        if(diffDays <= 7) {
+                            if(!cat7[l.category]) cat7[l.category] = 0;
+                            cat7[l.category] += amt;
+                        }
+                    }
+                });
+                daysOfWeek[dayIndex] += dailyTotal;
+                countOfWeek[dayIndex]++;
+            }
+        });
+
+        // Render Heatmap
+        let avgDays = daysOfWeek.map((tot, i) => countOfWeek[i] ? tot/countOfWeek[i] : 0);
+        let maxAvg = Math.max(...avgDays) || 1;
+        let dayNames = ['S','M','T','W','T','F','S'];
+        
+        let heatmapHTML = `<div style="display:flex; justify-content:space-between; margin-top:8px;">`;
+        avgDays.forEach((avg, i) => {
+            let ratio = avg / maxAvg;
+            let color = '#22c55e'; // Green (Low Burn)
+            if(ratio > 0.6) color = '#eab308'; // Yellow (Warning)
+            if(ratio > 0.85) color = '#ef4444'; // Red (High Burn)
+            if(avg === 0) color = 'rgba(255,255,255,0.05)';
+            
+            heatmapHTML += `<div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                <div style="font-size:10px; color:var(--text-muted);">${dayNames[i]}</div>
+                <div style="width:36px; height:36px; border-radius:6px; background-color:${color}; border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);">
+                    <span style="font-size:10px; font-weight:bold; color:#fff;">${Math.round(avg)}</span>
+                </div>
+            </div>`;
+        });
+        heatmapHTML += `</div>`;
+        document.getElementById('heatmapOutput').innerHTML = heatmapHTML;
+
+        // Render Micro-Trend Radar
+        let trendAlerts = '';
+        Object.keys(cat7).forEach(c => {
+            let weeklyAvg30 = cat30[c] / 4.28; // 30 days is roughly 4.28 weeks
+            // Only flag if spending is significant (>10) and 150% higher than normal
+            if (weeklyAvg30 > 10 && cat7[c] > (weeklyAvg30 * 1.5)) { 
+                let increase = Math.round(((cat7[c] - weeklyAvg30) / weeklyAvg30) * 100);
+                trendAlerts += `<div style="background: rgba(234, 179, 8, 0.15); border-left: 3px solid #eab308; padding: 8px; margin-top:8px; border-radius: 4px; color: #e2e8f0; font-size: 11px;">
+                    ⚠️ <strong>Acceleration Alert:</strong> Your <strong>${c}</strong> spend is up ${increase}% this week compared to your 30-day baseline.
+                </div>`;
+            }
+        });
+        
+        if(trendAlerts === '') {
+            trendAlerts = `<div style="font-size:11px; color:var(--text-muted); margin-top:8px; padding: 8px; background: rgba(255,255,255,0.02); border-radius: 4px;">
+                <span style="color:#22c55e;">✓</span> No negative micro-trends detected. Your baseline burn rate is stable.
+            </div>`;
+        }
+        document.getElementById('trendOutput').innerHTML = trendAlerts;
+    }
+
         function runWealthAllocator() {
         let now = Date.now();
         let cStart = new Date(s.settings.contractStart).getTime();
@@ -3136,11 +3224,12 @@ if(document.getElementById('advVapeBrand')) {
         let netUSD = liqUSD - requiredBridgeUSD - requiredStandardUSD;
         let totalSurplusUSD = netUSD + (netTND / fx);
 
-        let html = '';
+        let html = '<div style="width: 100%; display: flex; flex-direction: column; gap: 12px; text-align: left;">';
+        
         if (totalSurplusUSD <= 0) {
-            html = `<div style="color:var(--warning); font-size:11px; line-height:1.4;">
-                        🟡 <strong>Status Yellow: Hold Position.</strong><br>
-                        All current liquidity is mathematically locked to secure your ${daysToContract}-Day vacation runway, your bridge buffers, and fixed deadlines. You have no tactical surplus.
+            html += `<div style="background: rgba(234, 179, 8, 0.1); border-left: 3px solid #eab308; padding: 10px; border-radius: 4px; color: #e2e8f0; font-size: 12px; line-height: 1.5;">
+                        <strong style="color: #eab308;">🟡 Status Yellow: Hold Position.</strong><br>
+                        All current liquidity is locked to secure your ${daysToContract}-Day runway and bridge buffers. No tactical surplus available.
                     </div>`;
         } else {
             // Priority 3: The 70/30 Debt/Wealth Split
@@ -3148,14 +3237,11 @@ if(document.getElementById('advVapeBrand')) {
             let stbOverdraftUSD = (parseFloat(s.loan.overdraft) || 0) / fx;
             let totalDebtUSD = stbArrearsUSD + stbOverdraftUSD;
 
-            let stbAllocUSD = 0;
-            let ibkrAllocUSD = 0;
+            let stbAllocUSD = 0; let ibkrAllocUSD = 0;
 
             if (totalDebtUSD > 0) {
                 stbAllocUSD = totalSurplusUSD * 0.7;
                 ibkrAllocUSD = totalSurplusUSD * 0.3;
-                
-                // Prevent over-paying the debt
                 if (stbAllocUSD > totalDebtUSD) {
                     ibkrAllocUSD += (stbAllocUSD - totalDebtUSD);
                     stbAllocUSD = totalDebtUSD;
@@ -3164,27 +3250,31 @@ if(document.getElementById('advVapeBrand')) {
                 ibkrAllocUSD = totalSurplusUSD;
             }
 
-            html = `<div style="color:var(--success); font-size:11px; margin-bottom:8px;">
-                        🟢 <strong>Status Green:</strong> You have a safe Tactical Surplus of <strong>$${totalSurplusUSD.toFixed(2)}</strong>. All daily runway and embarkation buffers are fully secured.
+            html += `<div style="background: rgba(34, 197, 94, 0.1); border-left: 3px solid #22c55e; padding: 10px; border-radius: 4px; color: #e2e8f0; font-size: 12px; line-height: 1.5;">
+                        <strong style="color: #22c55e;">🟢 Status Green:</strong> Safe Tactical Surplus of <strong>$${totalSurplusUSD.toFixed(2)}</strong>. Daily runway & buffers secured.
                     </div>
-                    <div style="font-size:10px; color:var(--text-muted); margin-bottom:6px; letter-spacing:1px; text-transform:uppercase;">Recommended Execution:</div>`;
+                    <div style="background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 6px; padding: 10px;">
+                        <div style="font-size:10px; color:var(--text-muted); margin-bottom:8px; letter-spacing:1px; text-transform:uppercase; border-bottom: 1px dashed var(--panel-border); padding-bottom: 6px;">Recommended Execution</div>`;
             
             if (stbAllocUSD > 0) {
-                html += `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed var(--panel-border); padding:6px 0; font-size:12px;">
-                            <span style="color:var(--danger);">⚔️ STB Debt Kill Shot:</span>
-                            <strong>$${stbAllocUSD.toFixed(2)} / ${(stbAllocUSD * fx).toFixed(2)} TND</strong>
+                html += `<div style="display:flex; justify-content:space-between; align-items:center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <span style="color:#ef4444; font-size:12px;">⚔️ STB Debt Kill Shot:</span>
+                            <strong style="font-size:13px;">$${stbAllocUSD.toFixed(2)} <span style="font-size:10px; color:var(--text-muted);">/ ${(stbAllocUSD * fx).toFixed(2)} TND</span></strong>
                          </div>`;
             }
             if (ibkrAllocUSD > 0) {
-                html += `<div style="display:flex; justify-content:space-between; padding:6px 0; font-size:12px;">
-                            <span style="color:#38bdf8;">📈 IBKR (CSPX) Sweep:</span>
-                            <strong>$${ibkrAllocUSD.toFixed(2)}</strong>
+                html += `<div style="display:flex; justify-content:space-between; align-items:center; padding: 6px 0;">
+                            <span style="color:#38bdf8; font-size:12px;">📈 IBKR (CSPX) Sweep:</span>
+                            <strong style="font-size:13px;">$${ibkrAllocUSD.toFixed(2)}</strong>
                          </div>`;
             }
+            html += `</div>`;
         }
+        html += '</div>';
 
         let box = document.getElementById('navigatorOutput');
         if(box) box.innerHTML = html;
+
     }
 
     function renderProjects() {
