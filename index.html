@@ -3646,7 +3646,7 @@ if(document.getElementById('advVapeBrand')) {
 
     }
 
-        function runWealthAllocator() {
+            function runWealthAllocator() {
         let now = Date.now();
         let cStart = new Date(s.settings.contractStart).getTime();
         let fx = parseFloat(s.fx_rate) || 2.923;
@@ -3655,12 +3655,32 @@ if(document.getElementById('advVapeBrand')) {
         let liqTND = (parseFloat(s.vault.cash_tnd) || 0) + (parseFloat(s.vault.savings) || 0);
         let liqUSD = (parseFloat(s.vault.cash_usd) || 0) + (parseFloat(s.vault.brightwell) || 0) + (parseFloat(s.vault.wise) || 0);
         
-        // 2. Priority 0: Runway Protection
-        let daysToContract = 0;
-        if (s.mode === 'vacation' && now < cStart) {
-            daysToContract = Math.max(0, Math.ceil((cStart - now) / 86400000));
+        // 2. Priority 0: Runway Protection (Dynamic by Mode)
+        let requiredRunwayTND = 0;
+        let requiredRunwayUSD = 0;
+        let runwayDays = 0;
+        let runwayTargetName = "End of Timeline";
+
+        if (s.mode === 'vacation') {
+            if (now < cStart) {
+                runwayDays = Math.max(0, Math.ceil((cStart - now) / 86400000));
+                runwayTargetName = "Embarkation";
+            }
+            requiredRunwayTND = runwayDays * (parseFloat(s.history.vacation.limit) || 35);
+        } else {
+            let milestones = generateContractMilestones();
+            let nextM = getNextPendingMilestone(milestones);
+            if (nextM) {
+                let pDate = new Date(nextM.paydayDateStr + 'T23:59:59').getTime();
+                runwayDays = Math.max(0, Math.ceil((pDate - now) / 86400000));
+                runwayTargetName = `M${nextM.index + 1} Payday`;
+            } else {
+                let cEnd = new Date(s.settings.contractEnd + 'T23:59:59').getTime();
+                runwayDays = Math.max(0, Math.ceil((cEnd - now) / 86400000));
+                runwayTargetName = "Contract End";
+            }
+            requiredRunwayUSD = runwayDays * (parseFloat(s.history.onboard.limit) || 7.25);
         }
-        let requiredVacationTND = daysToContract * (parseFloat(s.history.vacation.limit) || 35);
         
         // 3. Priorities 1 & 2: Bridge & Standard Goals
         let requiredBridgeUSD = 0; let requiredBridgeTND = 0;
@@ -3678,8 +3698,8 @@ if(document.getElementById('advVapeBrand')) {
         });
 
         // 4. Calculate True Tactical Surplus
-        let netTND = liqTND - requiredVacationTND - requiredBridgeTND - requiredStandardTND;
-        let netUSD = liqUSD - requiredBridgeUSD - requiredStandardUSD;
+        let netTND = liqTND - requiredRunwayTND - requiredBridgeTND - requiredStandardTND;
+        let netUSD = liqUSD - requiredRunwayUSD - requiredBridgeUSD - requiredStandardUSD;
         let totalSurplusUSD = netUSD + (netTND / fx);
 
         let html = '<div style="width: 100%; display: flex; flex-direction: column; gap: 12px; text-align: left;">';
@@ -3687,7 +3707,7 @@ if(document.getElementById('advVapeBrand')) {
         if (totalSurplusUSD <= 0) {
             html += `<div style="background: rgba(234, 179, 8, 0.1); border-left: 3px solid #eab308; padding: 10px; border-radius: 4px; color: #e2e8f0; font-size: 12px; line-height: 1.5;">
                         <strong style="color: #eab308;">🟡 Status Yellow: Hold Position.</strong><br>
-                        All current liquidity is locked to secure your ${daysToContract}-Day runway and bridge buffers. No tactical surplus available.
+                        All current liquidity is locked to secure your ${runwayDays}-Day runway to ${runwayTargetName} and bridge buffers. No tactical surplus available.
                     </div>`;
         } else {
             // Priority 3: The 70/30 Debt/Wealth Split
@@ -3732,8 +3752,8 @@ if(document.getElementById('advVapeBrand')) {
 
         let box = document.getElementById('navigatorOutput');
         if(box) box.innerHTML = html;
-
     }
+
 
     function renderProjects() {
         let archHtml = '';
