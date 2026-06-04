@@ -5340,7 +5340,7 @@ async function deleteIncome(index) {
     // ==========================================
     // 14. COUNTDOWN TIMERS & UI UPDATES
     // ==========================================
-    function updateDynamicCountdown() {
+        function updateDynamicCountdown() {
         let now = Date.now();
         let vs = new Date(s.settings.vacationStart).getTime(); 
         let ve = new Date(s.settings.vacationEnd).getTime();
@@ -5349,22 +5349,53 @@ async function deleteIncome(index) {
         
         let mainText = ""; 
         let subText = "";
-        
-        if (now < vs) { 
-            let d = Math.ceil((vs - now) / 86400000); 
-            mainText = `${d} Days until Vacation`; 
-        } else if (now >= vs && now <= ve) { 
-            let d = Math.ceil((ve - now) / 86400000); 
-            mainText = `${d} Days of Vacation Left`; 
-            subText = `${Math.ceil((cs - now) / 86400000)} Days until Embarkation`; 
-        } else if (now > ve && now < cs) { 
-            let d = Math.ceil((cs - now) / 86400000); 
-            mainText = `${d} Days until Embarkation`; 
-        } else if (now >= cs && now <= ce) { 
-            let d = Math.ceil((ce - now) / 86400000); 
-            mainText = `${d} Days of Contract Left`; 
-        } else { 
-            mainText = "Timeline Complete"; 
+
+        if (s.mode === 'onboard') {
+            // ONBOARD MODE: Micro-Tracker (Paydays) + Macro (Vacation)
+            let milestones = generateContractMilestones();
+            let nextM = getNextPendingMilestone(milestones);
+            let daysToHome = Math.ceil((ce - now) / 86400000);
+            let homeStr = daysToHome > 0 ? ` • 🏝️ ${daysToHome} Days to Vacation` : ` • 🏝️ Going Home!`;
+
+            if (nextM) {
+                let pDate = new Date(nextM.paydayDateStr + 'T23:59:59').getTime();
+                let cDate = new Date(nextM.cutoffMondayStr + 'T23:59:59').getTime();
+                
+                let daysToPay = Math.max(0, Math.ceil((pDate - now) / 86400000));
+                let daysToCutoff = Math.ceil((cDate - now) / 86400000);
+
+                if (daysToPay === 0) {
+                    mainText = `💵 M${nextM.index + 1} Payday is Today!`;
+                    subText = `Check Brightwell and log paycheck${homeStr}`;
+                } else if (daysToCutoff >= 0) {
+                    mainText = `⏳ ${daysToPay} Days until M${nextM.index + 1} Payday`;
+                    subText = `⚠️ Cutoff in ${daysToCutoff} Days${homeStr}`;
+                } else {
+                    mainText = `⏳ ${daysToPay} Days until M${nextM.index + 1} Payday`;
+                    subText = `🔒 Cutoff locked. Processing${homeStr}`;
+                }
+            } else {
+                mainText = `${daysToHome > 0 ? daysToHome : 0} Days of Contract Left`;
+                subText = "All milestones cleared.";
+            }
+        } else {
+            // VACATION MODE: Macro-Tracker (Original Behavior)
+            if (now < vs) { 
+                let d = Math.ceil((vs - now) / 86400000); 
+                mainText = `${d} Days until Vacation`; 
+            } else if (now >= vs && now <= ve) { 
+                let d = Math.ceil((ve - now) / 86400000); 
+                mainText = `${d} Days of Vacation Left`; 
+                subText = `${Math.ceil((cs - now) / 86400000)} Days until Embarkation`; 
+            } else if (now > ve && now < cs) { 
+                let d = Math.ceil((cs - now) / 86400000); 
+                mainText = `${d} Days until Embarkation`; 
+            } else if (now >= cs && now <= ce) { 
+                let d = Math.ceil((ce - now) / 86400000); 
+                mainText = `${d} Days of Contract Left`; 
+            } else { 
+                mainText = "Timeline Complete"; 
+            }
         }
 
         document.getElementById('cdMain').innerText = mainText;
@@ -5376,6 +5407,7 @@ async function deleteIncome(index) {
             document.getElementById('cdSub').style.display = 'none';
         }
     }
+
 
     // ==========================================
     // 15. IBKR INVESTMENTS & VAULT OVERRIDES
