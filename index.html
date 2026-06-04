@@ -1071,6 +1071,45 @@
                     💵 Income & Funding Ledger
                 </div>
                 
+                <div id="contractTrackerWidget" style="margin-bottom: 15px; background: var(--vault-bg); border: 1px dashed var(--panel-border); padding: 12px; border-radius: 10px; display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span id="uiContractTitle" style="font-size:11px; font-weight:bold; color:var(--accent);">💼 Rank: Loading...</span>
+                        <button onclick="updatePositionProfile()" style="background:none; border:none; font-size:10px; color:#38bdf8; cursor:pointer; padding:0; text-decoration:underline;">💼 Update Position</button>
+                    </div>
+                    
+                    <div style="font-size:10px; color:var(--text-muted); margin-bottom:4px;" id="uiMilestoneProgressText">Milestones logged: 0 of 0</div>
+                    <div class="progress-container" style="height:8px; margin-top:4px; margin-bottom:12px; background:#0f172a; border:1px solid var(--panel-border);">
+                        <div class="progress-bar" id="uiContractProgressBar" style="width: 0%; background-color: var(--success);"></div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.02);">
+                        <div>
+                            <div style="font-size:8px; color:var(--text-muted); text-transform:uppercase;">Banked Gross</div>
+                            <strong id="uiTotalBankedGross" style="font-size:14px; color:var(--success);">$0.00</strong>
+                        </div>
+                        <div>
+                            <div style="font-size:8px; color:var(--text-muted); text-transform:uppercase;">Projected Remainder</div>
+                            <strong id="uiProjectedRemainder" style="font-size:14px; color:#38bdf8;">$0.00</strong>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:6px; margin-bottom:12px;">
+                        <button class="v-btn" style="flex:1; background:#16a34a; padding:8px 4px; font-size:10px;" onclick="logVoyageCompletion()">🚢 Log Voyage Completion</button>
+                        <button class="v-btn" style="flex:1; background:#ca8a04; padding:8px 4px; font-size:10px;" onclick="manageDryDockOverride()">⚓ Manage Dry Dock</button>
+                    </div>
+
+                    <div style="background:rgba(250,204,21,0.05); padding:8px; border-radius:6px; border:1px solid rgba(250,204,21,0.1); font-size:11px; margin-bottom:10px;">
+                        <div style="color:var(--text-muted); font-size:9px; text-transform:uppercase; font-weight:bold; letter-spacing:0.5px;">Pending Cutoff Queue</div>
+                        <div style="display:flex; justify-content:space-between; margin-top:4px;">
+                            <span>Unlogged Commissions:</span>
+                            <strong id="uiPendingCommissionsText" style="color:var(--accent);">$0.00</strong>
+                        </div>
+                    </div>
+
+                    <div style="font-size:10px; font-weight:bold; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Friday Timeline Ledger</div>
+                    <div id="milestoneTimelineLedger" class="scrollable-list" style="max-height:160px; border:1px solid var(--panel-border); background:#0f172a; border-radius:6px; padding:4px;"></div>
+                </div>
+                
                 <div style="margin-top:10px; font-size:11px; font-weight:bold; color:#38bdf8; padding-bottom:4px; border-bottom:1px dashed var(--panel-border);">
                     🚢 Carnival Paychecks
                 </div>
@@ -1081,6 +1120,7 @@
                 </div>
                 <div id="otherIncomeList" style="margin-top:5px; max-height:150px; overflow-y:auto; padding-right:4px;"></div>
             </div>
+
 
         </div>
 
@@ -1301,13 +1341,21 @@
 
     <div class="modal-overlay" id="paycheckModal">
         <div class="modal-content">
-            <div class="title" style="text-align:center; font-size:12px; color:var(--success);">💵 Smart Paycheck Wizard</div>
-            <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Input gross pay and adjust splits.</div>
+            <div class="title" style="text-align:center; font-size:12px; color:var(--success);" id="pwTitle">💵 Smart Paycheck Wizard</div>
+            <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:12px;" id="pwSubText">Input gross pay and adjust splits.</div>
+            
+            <div style="margin-bottom: 14px; display: flex; background: var(--vault-bg); border: 1px solid var(--panel-border); overflow: hidden; padding: 2px;" id="pwToggleContainer">
+                <button id="pwBtnContract" type="button" style="flex:1; border:none; background:var(--accent); color:#0f172a; padding:8px; font-size:11px; font-weight:bold; border-radius:8px; cursor:pointer;" onclick="setPaycheckWizardType('contract')">🚢 Contract Payday</button>
+                <button id="pwBtnAdHoc" type="button" style="flex:1; border:none; background:transparent; color:var(--text-muted); padding:8px; font-size:11px; font-weight:bold; border-radius:8px; cursor:pointer;" onclick="setPaycheckWizardType('adhoc')">🔵 Random Ad-Hoc</button>
+            </div>
+
+            <div id="pwMilestoneBadge" style="display:block; text-align:center; font-size:11px; color:var(--accent); font-weight:bold; background:rgba(56,189,248,0.1); padding:6px; border-radius:8px; margin-bottom:12px; border:1px dashed var(--accent);">
+                Targeting: Milestone 1
+            </div>
             
             <input type="number" id="pwGross" placeholder="Gross Pay (USD)" style="font-size:20px; font-weight:bold; text-align:center;" inputmode="decimal" oninput="calcPaycheck('gross', null)">
             
             <div style="margin-top:20px; background:var(--vault-bg); padding:12px; border-radius:8px; border:1px solid var(--panel-border);">
-                
                 <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; align-items:center;">
                     <span style="color:var(--danger); display:flex; align-items:center; gap:4px;">
                         🚨 STB Auto-Wire 
@@ -1345,6 +1393,7 @@
             </div>
         </div>
     </div>
+
 
     <div class="modal-overlay" id="ibkrModal">
         <div class="modal-content">
@@ -1755,8 +1804,17 @@
             vacationFundTarget: 2557 
         },
         vape_stash: { count: 0, empty_logs: [] },
+        contract_profile: {
+            positionTitle: "Carnival Sunrise Officer",
+            baseSalary: 2113.04,
+            dryDockActive: false,
+            dryDockStart: "2027-01-10",
+            dryDockDuration: 20,
+            voyages: []
+        },
         custom_categories: []
     };
+
 
     let s = null;
     const DB_NAME = 'CrewWalletDB';
@@ -1841,6 +1899,18 @@
     async function migrateData() {
         if (!s || !s.vault || !s.history) {
             s = USER_PRISTINE_DATA;
+            if (!s.contract_profile) {
+            s.contract_profile = {
+                positionTitle: "Carnival Sunrise Officer",
+                baseSalary: 2113.04,
+                dryDockActive: false,
+                dryDockStart: "2027-01-10",
+                dryDockDuration: 20,
+                voyages: []
+            };
+        }
+        if (!s.contract_profile.voyages) s.contract_profile.voyages = [];
+
         }
 
         // 1. REPAIR LEGACY STRUCTURES (Loose Objects -> Nested Objects)
@@ -2187,12 +2257,14 @@
             renderVapeStats(); 
         }
 
-        if (tabId === 'time') { 
+            if (tabId === 'time') { 
             loadPastDay(); 
+            renderContractTracker();
             renderIncomeLogs(); 
             document.getElementById('tmSearch').value = ''; 
             searchLogs(); 
         }
+
         if (tabId === 'settings') populateSettings();
     }
     // ==========================================
@@ -2209,6 +2281,199 @@
         "💨 Vape", 
         "🏦 Financial & Fees"
     ];
+
+let activeWizardType = 'contract';
+
+function generateContractMilestones() {
+    let milestones = [];
+    let startPayday = new Date('2026-08-21T05:00:00');
+    let contractEnd = new Date(s.settings.contractEnd + 'T23:59:59');
+    let currentPayday = new Date(startPayday.getTime());
+    let index = 0;
+    
+    while (currentPayday <= contractEnd || milestones.length < 12) {
+        if (milestones.length >= 22) break;
+        let pDate = new Date(currentPayday.getTime());
+        let cutoffMonday = new Date(pDate.getTime());
+        cutoffMonday.setDate(cutoffMonday.getDate() - 4);
+        cutoffMonday.setHours(0,0,0,0);
+        let startWindow = new Date(cutoffMonday.getTime());
+        startWindow.setDate(startWindow.getDate() - 14);
+        
+        let isDryDock = false;
+        if (s.contract_profile.dryDockActive && s.contract_profile.dryDockStart) {
+            let ddS = new Date(s.contract_profile.dryDockStart + 'T00:00:00');
+            let ddE = new Date(ddS.getTime());
+            ddE.setDate(ddE.getDate() + parseInt(s.contract_profile.dryDockDuration || 20));
+            if ((cutoffMonday >= ddS && cutoffMonday <= ddE) || (pDate >= ddS && pDate <= ddE)) {
+                isDryDock = true;
+            }
+        }
+        
+        milestones.push({
+            index: index,
+            paydayDateStr: pDate.toLocaleDateString('en-CA'),
+            cutoffMondayStr: cutoffMonday.toLocaleDateString('en-CA'),
+            startDateStr: startWindow.toLocaleDateString('en-CA'),
+            isDryDock: isDryDock,
+            status: 'pending',
+            loggedGross: 0,
+            positionSnapshot: '',
+            basePaySnapshot: 0
+        });
+        currentPayday.setDate(currentPayday.getDate() + 14);
+        index++;
+    }
+    
+    let contractPaychecks = (s.income_logs || []).filter(x => x.source === 'paycheck' && x.isContractPayday);
+    contractPaychecks.reverse().forEach((pc, i) => {
+        if (milestones[i]) {
+            milestones[i].status = 'cleared';
+            milestones[i].loggedGross = parseFloat(pc.amount) || 0;
+            milestones[i].positionSnapshot = pc.positionTitle || "Contract Base";
+            milestones[i].basePaySnapshot = pc.baseSalarySnapshot || 2113.04;
+        }
+    });
+    return milestones;
+}
+
+function getNextPendingMilestone(milestonesList) {
+    return milestonesList.find(m => m.status === 'pending') || null;
+}
+
+function calculatePendingCommissionsForMilestone(milestoneObj) {
+    if (!milestoneObj || milestoneObj.isDryDock) return 0;
+    let cutoffDate = new Date(milestoneObj.cutoffMondayStr + 'T23:59:59');
+    return (s.contract_profile.voyages || []).reduce((sum, v) => {
+        let vDate = new Date(v.dateStr);
+        return (vDate <= cutoffDate) ? sum + (parseFloat(v.estimatedCommission) || 0) : sum;
+    }, 0);
+}
+
+function renderContractTracker() {
+    let container = document.getElementById('contractTrackerWidget');
+    if (!container) return;
+    if (s.mode !== 'onboard') { container.style.display = 'none'; return; }
+    container.style.display = 'block';
+    
+    document.getElementById('uiContractTitle').innerText = `💼 Position: ${s.contract_profile.positionTitle || 'Not Set'}`;
+    let milestones = generateContractMilestones();
+    let totalMilestones = milestones.length;
+    let clearedCount = milestones.filter(m => m.status === 'cleared').length;
+    
+    document.getElementById('uiMilestoneProgressText').innerText = `Payday Milestones Captured: ${clearedCount} of ${totalMilestones}`;
+    let pct = totalMilestones > 0 ? (clearedCount / totalMilestones) * 100 : 0;
+    document.getElementById('uiContractProgressBar').style.width = pct + '%';
+    
+    let totalBanked = milestones.filter(m => m.status === 'cleared').reduce((sum, m) => sum + m.loggedGross, 0);
+    document.getElementById('uiTotalBankedGross').innerText = `$${totalBanked.toFixed(2)}`;
+    
+    let nextPending = getNextPendingMilestone(milestones);
+    let pendingCommissions = calculatePendingCommissionsForMilestone(nextPending);
+    document.getElementById('uiPendingCommissionsText').innerText = `$${pendingCommissions.toFixed(2)}`;
+    
+    let historicalCommissions = [];
+    (s.income_logs || []).forEach(log => {
+        if (log.source === 'paycheck' && log.isContractPayday && log.baseSalarySnapshot) {
+            let biweeklyBase = (parseFloat(log.baseSalarySnapshot) * 12) / 26;
+            let comm = parseFloat(log.amount) - biweeklyBase;
+            if (comm > 0) historicalCommissions.push(comm);
+        }
+    });
+    
+    let avgCommission = historicalCommissions.length > 0 
+        ? historicalCommissions.reduce((a, b) => a + b, 0) / historicalCommissions.length 
+        : 60;
+        
+    let projectedRemainder = 0;
+    milestones.forEach(m => {
+        if (m.status === 'pending') {
+            let biweeklyBase = ((parseFloat(s.contract_profile.baseSalary) || 2113.04) * 12) / 26;
+            if (m.isDryDock) { projectedRemainder += biweeklyBase; }
+            else if (nextPending && m.index === nextPending.index) { projectedRemainder += (biweeklyBase + pendingCommissions); }
+            else { projectedRemainder += (biweeklyBase + avgCommission); }
+        }
+    });
+    document.getElementById('uiProjectedRemainder').innerText = `$${projectedRemainder.toFixed(2)}`;
+    
+    let html = '';
+    milestones.forEach(m => {
+        let cl = m.status === 'cleared' ? 'color:var(--success);' : 'color:var(--text-muted);';
+        let badge = m.status === 'cleared' 
+            ? `<span class="cat-badge" style="background:var(--success); color:#000;">✅ Banked</span>` 
+            : (m.isDryDock ? `<span class="cat-badge" style="background:var(--danger)">⚓ Dry Dock</span>` : `<span class="cat-badge">⏳ Projected</span>`);
+            
+        let valueText = m.status === 'cleared' 
+            ? `$${m.loggedGross.toFixed(2)}` 
+            : (m.isDryDock ? `$${(((parseFloat(s.contract_profile.baseSalary)||2113.04)*12)/26).toFixed(2)}` : `~$${(((parseFloat(s.contract_profile.baseSalary)||2113.04)*12)/26 + avgCommission).toFixed(2)}`);
+            
+        html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px; border-bottom:1px solid rgba(255,255,255,0.03); font-size:11px; ${cl}">
+                    <div>
+                        <strong>M${m.index + 1} - ${new Date(m.paydayDateStr + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'})}</strong>
+                        ${badge}
+                        <div style="font-size:8px; color:var(--text-muted); margin-top:2px;">Cutoff Mon: ${m.cutoffMondayStr} ${m.status==='cleared' ? `[${m.positionSnapshot}]` : ''}</div>
+                    </div>
+                    <strong style="font-size:12px;">${valueText}</strong>
+                 </div>`;
+    });
+    document.getElementById('milestoneTimelineLedger').innerHTML = html;
+}
+
+async function updatePositionProfile() {
+    let title = await openUPrompt("Update Position Title", "Enter your active rank / assignment title:", s.contract_profile.positionTitle);
+    if (title === null) return;
+    let salaryStr = await openUPrompt("Update Base Pay Scale", "Enter dynamic monthly base salary compensation scale ($):", s.contract_profile.baseSalary);
+    if (salaryStr === null) return;
+    let salary = parseFloat(salaryStr);
+    if (isNaN(salary) || salary <= 0) return alert("Invalid baseline values rejected.");
+    s.contract_profile.positionTitle = title.trim() || "Cruise Professional";
+    s.contract_profile.baseSalary = salary;
+    saveState();
+    renderContractTracker();
+}
+
+async function logVoyageCompletion() {
+    let commStr = await openUPrompt("Log Voyage Commission", "Enter accumulated commissions captured across this completed cruise length ($):", "60.00");
+    if (commStr === null) return;
+    let comm = parseFloat(commStr);
+    if (isNaN(comm) || comm < 0) return alert("Numerical entries required.");
+    s.contract_profile.voyages.push({
+        id: 'voy_' + Date.now(),
+        dateStr: new Date().toLocaleDateString('en-CA'),
+        estimatedCommission: comm
+    });
+    saveState();
+    renderContractTracker();
+}
+
+async function manageDryDockOverride() {
+    let active = await openUConfirm("Shipyard Exception Guard", "Is the vessel currently occupying a non-passenger dry dock period status context block?");
+    s.contract_profile.dryDockActive = active;
+    if (active) {
+        let start = await openUPrompt("Set Yard Inception Point", "Enter Dry Dock timeline initiation date (YYYY-MM-DD):", s.contract_profile.dryDockStart || "2027-01-10");
+        if (start) s.contract_profile.dryDockStart = start;
+        let dur = await openUPrompt("Set Execution Window Length", "Enter projected duration length block parameters (Days):", s.contract_profile.dryDockDuration || "20");
+        if (dur) s.contract_profile.dryDockDuration = parseInt(dur) || 20;
+    }
+    saveState();
+    renderContractTracker();
+}
+
+function setPaycheckWizardType(type) {
+    activeWizardType = type;
+    let btnContract = document.getElementById('pwBtnContract');
+    let btnAdHoc = document.getElementById('pwBtnAdHoc');
+    if (type === 'contract') {
+        btnContract.style.background = 'var(--accent)'; btnContract.style.color = '#0f172a';
+        btnAdHoc.style.background = 'transparent'; btnAdHoc.style.color = 'var(--text-muted)';
+        document.getElementById('pwTitle').innerText = "🚢 Carnival Contract Paycheck Wizard";
+    } else {
+        btnAdHoc.style.background = 'var(--accent)'; btnAdHoc.style.color = '#0f172a';
+        btnContract.style.background = 'transparent'; btnContract.style.color = 'var(--text-muted)';
+        document.getElementById('pwTitle').innerText = "🔵 Random Ad-Hoc Revenue Log";
+    }
+}
+
     
     function populateCategories() {
         let html = '';
@@ -4156,34 +4421,51 @@ if(document.getElementById('advVapeBrand')) {
         document.getElementById('simResultInterest').innerText = totalInt.toFixed(2) + " TND";
     }
 
-    function openPaycheckModal() {
-        document.getElementById('pwGross').value = ''; 
-        document.getElementById('pwLoanAmt').value = ''; 
-        document.getElementById('pwSavAmt').value = ''; 
-        document.getElementById('pwOpAmt').value = '';
-        document.getElementById('paycheckModal').style.display = 'flex';
-    }
-
-    function calcPaycheck(source, tgt) {
-        let g = parseFloat(document.getElementById('pwGross').value) || 0;
-        let lP = parseFloat(document.getElementById('pwLoanPct').value) || 0; 
-        let sP = parseFloat(document.getElementById('pwSavPct').value) || 0; 
-        let oP = parseFloat(document.getElementById('pwOpPct').value) || 0;
-        
-        if (source === 'gross' || source === 'pct') {
-            document.getElementById('pwLoanAmt').value = (g * (lP / 100)).toFixed(2); 
-            document.getElementById('pwSavAmt').value = (g * (sP / 100)).toFixed(2); 
-            document.getElementById('pwOpAmt').value = (g * (oP / 100)).toFixed(2);
-        } else if (source === 'amt' && g > 0) {
-            let lA = parseFloat(document.getElementById('pwLoanAmt').value) || 0; 
-            let sA = parseFloat(document.getElementById('pwSavAmt').value) || 0; 
-            let oA = parseFloat(document.getElementById('pwOpAmt').value) || 0;
-            
-            if (tgt === 'loan') document.getElementById('pwLoanPct').value = ((lA / g) * 100).toFixed(1); 
-            if (tgt === 'sav') document.getElementById('pwSavPct').value = ((sA / g) * 100).toFixed(1); 
-            if (tgt === 'op') document.getElementById('pwOpPct').value = ((oA / g) * 100).toFixed(1);
+function openPaycheckModal() {
+    document.getElementById('pwGross').value = ''; 
+    document.getElementById('pwLoanAmt').value = ''; 
+    document.getElementById('pwSavAmt').value = ''; 
+    document.getElementById('pwOpAmt').value = '';
+    
+    if (s.mode === 'onboard') {
+        document.getElementById('pwToggleContainer').style.display = 'flex';
+        let milestones = generateContractMilestones();
+        let nextPending = getNextPendingMilestone(milestones);
+        if (nextPending) {
+            document.getElementById('pwMilestoneBadge').style.display = 'block';
+            document.getElementById('pwMilestoneBadge').innerText = `🎯 Target Allocation Slot: Milestone ${nextPending.index + 1} (${nextPending.paydayDateStr})`;
+            setPaycheckWizardType('contract');
+        } else {
+            setPaycheckWizardType('adhoc');
         }
+    } else {
+        document.getElementById('pwToggleContainer').style.display = 'none';
+        document.getElementById('pwMilestoneBadge').style.display = 'none';
+        setPaycheckWizardType('adhoc');
     }
+    document.getElementById('paycheckModal').style.display = 'flex';
+}
+
+function calcPaycheck(source, tgt) {
+    let g = parseFloat(document.getElementById('pwGross').value) || 0;
+    let lP = parseFloat(document.getElementById('pwLoanPct').value) || 0; 
+    let sP = parseFloat(document.getElementById('pwSavPct').value) || 0; 
+    let oP = parseFloat(document.getElementById('pwOpPct').value) || 0;
+    
+    if (source === 'gross' || source === 'pct') {
+        document.getElementById('pwLoanAmt').value = (g * (lP / 100)).toFixed(2); 
+        document.getElementById('pwSavAmt').value = (g * (sP / 100)).toFixed(2); 
+        document.getElementById('pwOpAmt').value = (g * (oP / 100)).toFixed(2);
+    } else if (source === 'amt' && g > 0) {
+        let lA = parseFloat(document.getElementById('pwLoanAmt').value) || 0; 
+        let sA = parseFloat(document.getElementById('pwSavAmt').value) || 0; 
+        let oA = parseFloat(document.getElementById('pwOpAmt').value) || 0;
+        
+        if (tgt === 'loan') document.getElementById('pwLoanPct').value = ((lA / g) * 100).toFixed(1); 
+        if (tgt === 'sav') document.getElementById('pwSavPct').value = ((sA / g) * 100).toFixed(1); 
+        if (tgt === 'op') document.getElementById('pwOpPct').value = ((oA / g) * 100).toFixed(1);
+    }
+}
 
 function processPaycheck() {
     let g = parseFloat(document.getElementById('pwGross').value) || 0;
@@ -4192,28 +4474,46 @@ function processPaycheck() {
     let sA = parseFloat(document.getElementById('pwSavAmt').value) || 0;
     
     if (g <= 0) return alert("Enter a valid gross pay.");
-
     if (oA > 0) s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + oA;
     
-    // Tag the wires with a unique ID
     let pId = 'pc_' + Date.now();
     if (!s.transit_queue) s.transit_queue = [];
     if (lA > 0) s.transit_queue.push({ type: 'stb', amount: lA, date: new Date().toLocaleDateString('en-CA'), parentId: pId });
     if (sA > 0) s.transit_queue.push({ type: 'savings', amount: sA, date: new Date().toLocaleDateString('en-CA'), parentId: pId });
     
     let detailsStr = `Op: $${oA.toFixed(2)} (Cleared) | STB: $${lA.toFixed(2)} (Pending) | Sav: $${sA.toFixed(2)} (Pending)`;
-    s.income_logs.unshift({ 
+    
+    let logEntry = { 
         id: pId,
         date: new Date().toLocaleDateString('en-CA'), 
         amount: g, 
         source: 'paycheck', 
         wallet: 'SPLIT ROUTING', 
-        desc: '🚢 Carnival Paycheck - ' + detailsStr 
-    });
+        desc: (activeWizardType === 'contract' ? '🚢 Regular Contract Payday - ' : '🔵 Ad-Hoc Paycheck - ') + detailsStr,
+        isContractPayday: (activeWizardType === 'contract' && s.mode === 'onboard'),
+        positionTitle: s.contract_profile.positionTitle,
+        baseSalarySnapshot: s.contract_profile.baseSalary
+    };
 
+    if (logEntry.isContractPayday) {
+        let milestones = generateContractMilestones();
+        let targetMilestone = getNextPendingMilestone(milestones);
+        if (targetMilestone) {
+            let cutoffDate = new Date(targetMilestone.cutoffMondayStr + 'T23:59:59');
+            s.contract_profile.voyages = (s.contract_profile.voyages || []).filter(v => {
+                return new Date(v.dateStr) > cutoffDate;
+            });
+        }
+    }
+
+    s.income_logs.unshift(logEntry);
     saveState(); 
     document.getElementById('paycheckModal').style.display = 'none';
-    if (document.getElementById('tab-time').classList.contains('active')) renderIncomeLogs();
+    
+    if (document.getElementById('tab-time').classList.contains('active')) {
+        renderContractTracker();
+        renderIncomeLogs();
+    }
 }
 
         function openTransitModal() {
@@ -4520,7 +4820,6 @@ async function deleteIncome(index) {
             });
         }
 
-        // === PIPELINE METRICS SYNC BLOCK ===
         let routeName = "";
         if (log.wallet === 'STB Settlement') routeName = "Brightwell ➔ STB";
         else if (log.wallet === 'Savings' || log.wallet === 'savings') routeName = "Brightwell ➔ Savings TND";
@@ -4531,9 +4830,7 @@ async function deleteIncome(index) {
             let tIdx = s.history.transfers.map(t => t.route).lastIndexOf(routeName);
             if (tIdx > -1) s.history.transfers.splice(tIdx, 1);
         }
-        // ===================================
     }
-
     else {
         let targetWallet = log.wallet ? log.wallet.toLowerCase() : '';
         if (s.vault[targetWallet] !== undefined) {
@@ -4547,6 +4844,7 @@ async function deleteIncome(index) {
     if (document.getElementById('tab-dash').classList.contains('active')) {
         renderDashboard();
     } else {
+        renderContractTracker();
         renderIncomeLogs();
     }
 }
