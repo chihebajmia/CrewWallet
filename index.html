@@ -1943,6 +1943,24 @@
             if (inc.details !== undefined) { inc.desc = inc.details; delete inc.details; }
             inc.amount = parseFloat(inc.amount) || 0;
         });
+        (s.history.vacation.archive || []).forEach(day => {
+            if (day.logs && Array.isArray(day.logs)) {
+                day.logs.forEach(log => {
+                    if (log.fxRate !== undefined) delete log.fxRate;
+                    if (log.ts !== undefined && log.time) delete log.ts;
+                    if (log.deductedAmount !== undefined) delete log.deductedAmount;
+                    if (log.vapeQty !== undefined) delete log.vapeQty;
+                    if (log.deadMoney !== undefined) delete log.deadMoney;
+                });
+            }
+        });
+
+        if (!s.income_logs) s.income_logs = [];
+        s.income_logs.forEach((inc, idx) => {
+            if (!inc.id) {
+                inc.id = 'legacy_inc_' + idx + '_' + Date.now();
+            }
+        });
 
         // 4. FIX V37 EXPENSE LOGS & TIME MACHINE DATES
         ['vacation', 'onboard'].forEach(m => {
@@ -2286,9 +2304,32 @@ let activeWizardType = 'contract';
 
 function generateContractMilestones() {
     let milestones = [];
-    let startPayday = new Date('2026-08-21T05:00:00');
+    if (!s.settings.contractStart) return milestones;
+    
+    // 1. Establish the Carnival Universal Bi-Weekly Anchor
+    let globalAnchor = new Date('2026-08-21T05:00:00');
+    let cStart = new Date(s.settings.contractStart + 'T05:00:00');
+    
+    // 2. Align the start date to the correct 14-day corporate cycle
+    let msPer14Days = 14 * 24 * 60 * 60 * 1000;
+    let cyclesDiff = Math.floor((cStart.getTime() - globalAnchor.getTime()) / msPer14Days);
+    let firstPayday = new Date(globalAnchor.getTime() + (cyclesDiff * msPer14Days));
+    
+    // 3. Enforce the Monday Cutoff Rule
+    while (true) {
+        let cutoffMonday = new Date(firstPayday.getTime());
+        cutoffMonday.setDate(cutoffMonday.getDate() - 4);
+        cutoffMonday.setHours(0,0,0,0);
+        
+        // You only get paid if your contract starts BEFORE the Monday cutoff
+        if (cutoffMonday > cStart) {
+            break;
+        }
+        firstPayday.setTime(firstPayday.getTime() + msPer14Days);
+    }
+    
     let contractEnd = new Date(s.settings.contractEnd + 'T23:59:59');
-    let currentPayday = new Date(startPayday.getTime());
+    let currentPayday = new Date(firstPayday.getTime());
     let index = 0;
     
     while (currentPayday <= contractEnd || milestones.length < 12) {
@@ -2337,6 +2378,7 @@ function generateContractMilestones() {
     return milestones;
 }
 
+
 function getNextPendingMilestone(milestonesList) {
     return milestonesList.find(m => m.status === 'pending') || null;
 }
@@ -2381,9 +2423,12 @@ function renderContractTracker() {
         }
     });
     
-    let avgCommission = historicalCommissions.length > 0 
-        ? historicalCommissions.reduce((a, b) => a + b, 0) / historicalCommissions.length 
-        : 60;
+    let avgCommission = 60;
+    if (historicalCommissions.length > 0) {
+        avgCommission = historicalCommissions.reduce((a, b) => a + b, 0) / historicalCommissions.length;
+    } else if (s.contract_profile.voyages && s.contract_profile.voyages.length > 0) {
+        avgCommission = s.contract_profile.voyages.reduce((sum, v) => sum + (parseFloat(v.estimatedCommission) || 0), 0) / s.contract_profile.voyages.length;
+    }
         
     let projectedRemainder = 0;
     milestones.forEach(m => {
@@ -2397,6 +2442,7 @@ function renderContractTracker() {
     document.getElementById('uiProjectedRemainder').innerText = `$${projectedRemainder.toFixed(2)}`;
     
     let html = '';
+    let distantHtml = '';
     milestones.forEach(m => {
         let cl = m.status === 'cleared' ? 'color:var(--success);' : 'color:var(--text-muted);';
         let badge = m.status === 'cleared' 
@@ -2407,7 +2453,7 @@ function renderContractTracker() {
             ? `$${m.loggedGross.toFixed(2)}` 
             : (m.isDryDock ? `$${(((parseFloat(s.contract_profile.baseSalary)||2113.04)*12)/26).toFixed(2)}` : `~$${(((parseFloat(s.contract_profile.baseSalary)||2113.04)*12)/26 + avgCommission).toFixed(2)}`);
             
-        html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px; border-bottom:1px solid rgba(255,255,255,0.03); font-size:11px; ${cl}">
+        let rowTemplate = `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px; border-bottom:1px solid rgba(255,255,255,0.03); font-size:11px; ${cl}">
                     <div>
                         <strong>M${m.index + 1} - ${new Date(m.paydayDateStr + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'})}</strong>
                         ${badge}
@@ -2415,9 +2461,21 @@ function renderContractTracker() {
                     </div>
                     <strong style="font-size:12px;">${valueText}</strong>
                  </div>`;
+                 
+        if (m.status === 'cleared' || (nextPending && m.index === nextPending.index) || (nextPending && m.index === nextPending.index + 1)) {
+            html += rowTemplate;
+        } else {
+            distantHtml += rowTemplate;
+        }
     });
+    
+    if (distantHtml) {
+        html += `<details style="margin-top:4px; border-top:1px dashed rgba(255,255,255,0.05);"><summary style="font-size:10px; color:#38bdf8; padding:8px 4px; cursor:pointer; outline:none; font-weight:bold;">🔍 Reveal Full Contract Timeline (${totalMilestones - clearedCount - (nextPending ? 2 : 0)} More)</summary><div style="background:rgba(0,0,0,0.15); padding:2px; border-radius:6px; margin-top:4px;">${distantHtml}</div></details>`;
+    }
+    
     document.getElementById('milestoneTimelineLedger').innerHTML = html;
 }
+
 
 async function updatePositionProfile() {
     let title = await openUPrompt("Update Position Title", "Enter your active rank / assignment title:", s.contract_profile.positionTitle);
