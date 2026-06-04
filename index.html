@@ -1899,7 +1899,9 @@
     async function migrateData() {
         if (!s || !s.vault || !s.history) {
             s = USER_PRISTINE_DATA;
-            if (!s.contract_profile) {
+        }
+        
+        if (!s.contract_profile) {
             s.contract_profile = {
                 positionTitle: "Carnival Sunrise Officer",
                 baseSalary: 2113.04,
@@ -1910,8 +1912,6 @@
             };
         }
         if (!s.contract_profile.voyages) s.contract_profile.voyages = [];
-
-        }
 
         // 1. REPAIR LEGACY STRUCTURES (Loose Objects -> Nested Objects)
         if (!s.ious) s.ious = { payables: [], receivables: [] };
