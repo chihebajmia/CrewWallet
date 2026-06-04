@@ -3646,7 +3646,7 @@ if(document.getElementById('advVapeBrand')) {
 
     }
 
-            function runWealthAllocator() {
+    function runWealthAllocator() {
         let now = Date.now();
         let cStart = new Date(s.settings.contractStart).getTime();
         let fx = parseFloat(s.fx_rate) || 2.923;
@@ -3697,10 +3697,18 @@ if(document.getElementById('advVapeBrand')) {
             }
         });
 
-        // 4. Calculate True Tactical Surplus
+        // 4. Calculate True Tactical Surplus with Currency Firewall
         let netTND = liqTND - requiredRunwayTND - requiredBridgeTND - requiredStandardTND;
         let netUSD = liqUSD - requiredRunwayUSD - requiredBridgeUSD - requiredStandardUSD;
-        let totalSurplusUSD = netUSD + (netTND / fx);
+        
+        let totalSurplusUSD = 0;
+        if (s.mode === 'vacation') {
+            // Cross-collateralization allowed on land
+            totalSurplusUSD = netUSD + (netTND / fx);
+        } else {
+            // TND is frozen/inaccessible on the ship. Only USD is deployable.
+            totalSurplusUSD = netUSD;
+        }
 
         let html = '<div style="width: 100%; display: flex; flex-direction: column; gap: 12px; text-align: left;">';
         
@@ -3729,7 +3737,7 @@ if(document.getElementById('advVapeBrand')) {
             }
 
             html += `<div style="background: rgba(34, 197, 94, 0.1); border-left: 3px solid #22c55e; padding: 10px; border-radius: 4px; color: #e2e8f0; font-size: 12px; line-height: 1.5;">
-                        <strong style="color: #22c55e;">🟢 Status Green:</strong> Safe Tactical Surplus of <strong>$${totalSurplusUSD.toFixed(2)}</strong>. Daily runway & buffers secured.
+                        <strong style="color: #22c55e;">🟢 Status Green:</strong> Safe Tactical Surplus of <strong>$${totalSurplusUSD.toFixed(2)}</strong>. Daily runway to ${runwayTargetName} & buffers secured.
                     </div>
                     <div style="background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 6px; padding: 10px;">
                         <div style="font-size:10px; color:var(--text-muted); margin-bottom:8px; letter-spacing:1px; text-transform:uppercase; border-bottom: 1px dashed var(--panel-border); padding-bottom: 6px;">Recommended Execution</div>`;
