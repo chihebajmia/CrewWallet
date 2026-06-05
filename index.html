@@ -2150,17 +2150,6 @@
         // 10. BOOT THE APP
         checkLock();
 
-                /* ONE-TIME NIGHT OWL DATA FIX */
-        let vArch = s.history.vacation.archive || [];
-        let fix3 = vArch.find(d => d.date === "2026-06-03" && d.logs.some(l => l.dateStr && l.dateStr.indexOf("2026-06-02") !== -1));
-        if (fix3) fix3.date = "2026-06-02";
-        
-        let fix4 = vArch.find(d => d.date === "2026-06-04" && d.logs.some(l => l.dateStr && l.dateStr.indexOf("2026-06-03") !== -1));
-        if (fix4) fix4.date = "2026-06-03";
-        
-        let fix5 = vArch.find(d => d.date === "2026-06-05" && d.logs.some(l => l.dateStr && l.dateStr.indexOf("2026-06-04") !== -1));
-        if (fix5) fix5.date = "2026-06-04";
-
     }
 
     function processInterestBleed() {
@@ -2972,6 +2961,8 @@ function setPaycheckWizardType(type) {
     // 6. CORE RENDER & DASHBOARD MATH
     // ==========================================
     function renderApp() {
+        checkAutoRollover(); /* <-- Injected right here at the very top */
+        
         applyTheme();
         populateCategories();
         populateProjectDropdowns();
@@ -2983,6 +2974,7 @@ function setPaycheckWizardType(type) {
             calculateBehavioralStreaks();
         }
     }
+
 
     function renderDashboard() {
         let fx = parseFloat(s.fx_rate) || 2.923;
@@ -3505,24 +3497,37 @@ if(document.getElementById('advVapeBrand')) {
         saveState();
     }
 
-    function closeOutDay() {
+    async function closeOutDay(autoTargetDate = null) {
         let curLogs = s.history[s.mode].current || [];
         let curBal = parseFloat(s.history[s.mode].balance) || 0;
         let lim = parseFloat(s.history[s.mode].limit) || 0;
         
         if (curLogs.length === 0 && curBal === lim) {
-            return alert("Nothing to close. You haven't spent anything today.");
+            if (!autoTargetDate) alert("Nothing to close. You haven't spent anything today.");
+            return;
+        }
+        
+        /* 1. Calculate the 4:00 AM Logical Date */
+        let logicalNow = new Date(Date.now() - (4 * 60 * 60 * 1000));
+        let defaultDate = logicalNow.toLocaleDateString("en-CA");
+        let finalDate = defaultDate;
+        
+        /* 2. Determine Manual Override vs Background Auto-Close */
+        if (autoTargetDate) {
+            finalDate = autoTargetDate; 
+        } else {
+            finalDate = await openUPrompt("Close Out Day", "Confirm the date for these expenses:", defaultDate);
+            if (!finalDate) return; /* User clicked cancel */
         }
         
         if (curBal > 0) {
             let fx = parseFloat(s.fx_rate) || 2.923;
-            let surplusTND = s.mode === 'vacation' ? curBal : (curBal * fx);
+            let surplusTND = s.mode === "vacation" ? curBal : (curBal * fx);
             s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + surplusTND;
         }
         
-        // BUG FIX: Forces strict YYYY-MM-DD formatting for the database
         s.history[s.mode].archive.push({ 
-            date: new Date().toLocaleDateString('en-CA'), 
+            date: finalDate, 
             logs: [...curLogs], 
             limit: lim, 
             surplus: curBal 
@@ -3532,7 +3537,28 @@ if(document.getElementById('advVapeBrand')) {
         s.history[s.mode].balance = lim;
         
         saveState();
+        if (!autoTargetDate) renderApp();
     }
+
+        function checkAutoRollover() {
+        let curLogs = s.history[s.mode].current || [];
+        if (curLogs.length > 0 && curLogs[0].dateStr) {
+            /* Look at the oldest log in the queue to find when this day "started" */
+            let firstLogTime = new Date(curLogs[0].dateStr).getTime();
+            let logLogicalDate = new Date(firstLogTime - (4 * 3600 * 1000)).toLocaleDateString("en-CA");
+            
+            /* Check what logical day it is RIGHT NOW */
+            let currentLogicalDate = new Date(Date.now() - (4 * 3600 * 1000)).toLocaleDateString("en-CA");
+            
+            /* If the log belongs to yesterday, execute a silent background archive! */
+            if (logLogicalDate !== currentLogicalDate) {
+                closeOutDay(logLogicalDate);
+            }
+        }
+    }
+
+
+    
     // ==========================================
     // 9. ANALYTICS RENDERING (PROJECTS, VAPES, CHARTS)
     // ==========================================
