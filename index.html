@@ -2149,6 +2149,18 @@
         
         // 10. BOOT THE APP
         checkLock();
+
+                /* ONE-TIME NIGHT OWL DATA FIX */
+        let vArch = s.history.vacation.archive || [];
+        let fix3 = vArch.find(d => d.date === "2026-06-03" && d.logs.some(l => l.dateStr && l.dateStr.indexOf("2026-06-02") !== -1));
+        if (fix3) fix3.date = "2026-06-02";
+        
+        let fix4 = vArch.find(d => d.date === "2026-06-04" && d.logs.some(l => l.dateStr && l.dateStr.indexOf("2026-06-03") !== -1));
+        if (fix4) fix4.date = "2026-06-03";
+        
+        let fix5 = vArch.find(d => d.date === "2026-06-05" && d.logs.some(l => l.dateStr && l.dateStr.indexOf("2026-06-04") !== -1));
+        if (fix5) fix5.date = "2026-06-04";
+
     }
 
     function processInterestBleed() {
