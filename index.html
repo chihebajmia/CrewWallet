@@ -3994,22 +3994,20 @@ if(document.getElementById('advVapeBrand')) {
     }
 
 
-    function renderVapeStats() {
-        let totalSpend = 0;
-        let estDevices = 0;
+        function renderVapeStats() {
         let purchaseDates = [];
-        
         let modeVapeSpend = 0;
         let modeVapeDevices = 0;
-
+        
+        /* 1. Strict Financial Isolation */
         ['vacation', 'onboard'].forEach(m => {
             let isCurrentMode = (m === s.mode);
             (s.history[m].archive || []).forEach(day => {
                 (day.logs || []).forEach(log => {
-                    if (log.category === '💨 Vape' || log.cat === 'vape') {
+                    let isVape = (log.category === `💨 Vape` || log.cat === `vape`);
+                    if (isVape) {
                         let amt = parseFloat(log.amount) || 0;
                         let qty = parseInt(log.vapeQty) || 1;
-                        totalSpend += amt; estDevices += qty;
                         if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
                         if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
                         else if (day.date) purchaseDates.push(new Date(day.date));
@@ -4017,84 +4015,129 @@ if(document.getElementById('advVapeBrand')) {
                 });
             });
             (s.history[m].current || []).forEach(log => {
-                if (log.category === '💨 Vape' || log.cat === 'vape') {
+                let isVape = (log.category === `💨 Vape` || log.cat === `vape`);
+                if (isVape) {
                     let amt = parseFloat(log.amount) || 0;
                     let qty = parseInt(log.vapeQty) || 1;
-                    totalSpend += amt; estDevices += qty;
                     if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
                     if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
                     else purchaseDates.push(new Date()); 
                 }
             });
         });
-
+        
         purchaseDates.sort((a, b) => a.getTime() - b.getTime());
 
-        let currentStash = parseInt(s.vape_stash.count) || 0;
-        let consumedDevices = estDevices - currentStash;
-        if (consumedDevices <= 0) consumedDevices = 0.5;
-
-        let trueVapeBurnRate = 4; // Fallback
-        let daysSinceLast = 0;
-        let lastDateStr = "N/A";
-
-        if (purchaseDates.length > 0) {
-            let firstDate = purchaseDates[0];
-            let lastDate = purchaseDates[purchaseDates.length - 1];
-            
-            let totalDaysSmoking = Math.max(1, (Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+        /* 2. The Graveyard Burn Rate */
+        let inv = s.vape_stash.inventory || [];
+        let dead = inv.filter(v => v.status === `dead`).sort((a,b) => b.killed_ts - a.killed_ts);
+        
+        let trueVapeBurnRate = 4; /* Fallback rate */
+        
+        if (dead.length > 0) {
+            let totalLifespans = 0;
+            let validDeadCount = 0;
+            dead.forEach(v => {
+                if (v.opened_ts && v.killed_ts) {
+                    totalLifespans += (v.killed_ts - v.opened_ts) / 86400000;
+                    validDeadCount++;
+                }
+            });
+            if (validDeadCount > 0) {
+                trueVapeBurnRate = totalLifespans / validDeadCount;
+            }
+        } else if (purchaseDates.length > 0) {
+            /* Fallback: estimate from purchase dates */
+            let currentStash = parseInt(s.vape_stash.count) || 0;
+            let globalDevices = 0;
+            ['vacation', 'onboard'].forEach(m => {
+                (s.history[m].archive || []).forEach(day => { 
+                    (day.logs || []).forEach(log => { 
+                        if (log.category === `💨 Vape` || log.cat === `vape`) globalDevices += (parseInt(log.vapeQty) || 1); 
+                    }); 
+                });
+                (s.history[m].current || []).forEach(log => { 
+                    if (log.category === `💨 Vape` || log.cat === `vape`) globalDevices += (parseInt(log.vapeQty) || 1); 
+                });
+            });
+            let consumedDevices = Math.max(0.5, globalDevices - currentStash);
+            let totalDaysSmoking = Math.max(1, (Date.now() - purchaseDates[0].getTime()) / 86400000);
             trueVapeBurnRate = totalDaysSmoking / consumedDevices;
-            
-            daysSinceLast = Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        let daysSinceLast = 0;
+        let lastDateStr = `N/A`;
+        if (purchaseDates.length > 0) {
+            let lastDate = purchaseDates[purchaseDates.length - 1];
+            daysSinceLast = Math.floor((Date.now() - lastDate.getTime()) / 86400000);
             lastDateStr = lastDate.toLocaleDateString();
         }
 
-        // --- Clever Projection Math ---
-        let isTND = s.mode === 'vacation';
-        let sym = isTND ? 'TND' : 'USD';
+        /* 3. Clever Dual-Projection Math */
+        let isTND = s.mode === `vacation`;
+        let sym = isTND ? `TND` : `USD`;
         
         let nowTs = Date.now();
         let daysLeft = 1;
+        let daysToPayday = 0;
+        let hasPayday = false;
+        
         if (isTND) {
             let cEnd = new Date(s.settings.contractStart).getTime();
             daysLeft = Math.max(1, Math.ceil((cEnd - nowTs) / 86400000));
         } else {
-            let seed = new Date('2026-08-21T00:00:00Z').getTime();
-            if (nowTs < seed) {
-                daysLeft = Math.max(1, Math.ceil((seed - nowTs) / 86400000));
-            } else {
-                let msSince = nowTs - seed;
-                let cycles = Math.floor(msSince / (14 * 86400000));
-                let nextPayday = seed + ((cycles + 1) * 14 * 86400000);
-                daysLeft = Math.max(1, Math.ceil((nextPayday - nowTs) / 86400000));
+            let cEnd = new Date(s.settings.contractEnd + `T23:59:59`).getTime();
+            daysLeft = Math.max(1, Math.ceil((cEnd - nowTs) / 86400000));
+            
+            let milestones = generateContractMilestones();
+            let nextM = getNextPendingMilestone(milestones);
+            if (nextM) {
+                let pDate = new Date(nextM.paydayDateStr + `T23:59:59`).getTime();
+                daysToPayday = Math.max(0, Math.ceil((pDate - nowTs) / 86400000));
+                hasPayday = true;
             }
         }
         
+        let currentStash = parseInt(s.vape_stash.count) || 0;
         let projectedVapesNeeded = daysLeft / trueVapeBurnRate;
         let vapesToBuy = Math.max(0, projectedVapesNeeded - currentStash);
         let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (isTND ? 35 : 10);
         let projectedSpend = vapesToBuy * modeAvgCost;
 
-        let h = '';
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Total Lifetime Spend:</span> <strong style="color:var(--danger);">${totalSpend.toFixed(2)} (Combined)</strong></div>`;
+        let paydayProjHTML = ``;
+        if (hasPayday && daysToPayday > 0) {
+            let pdVapesNeeded = daysToPayday / trueVapeBurnRate;
+            let pdVapesToBuy = Math.max(0, pdVapesNeeded - currentStash);
+            let pdProjectedSpend = pdVapesToBuy * modeAvgCost;
+            paydayProjHTML = `<div style="display:flex; justify-content:space-between; font-size:11px; border-top:1px dashed var(--panel-border); padding-top:6px; margin-top:6px;">
+                <span>Est. Payday Spend (${daysToPayday} Days):</span>
+                <strong style="color:var(--success);">~${Math.ceil(pdVapesToBuy)} Vapes (${pdProjectedSpend.toFixed(2)} ${sym})</strong>
+            </div>`;
+        }
+
+        let h = ``;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>${isTND ? `Vacation` : `Onboard`} Spend:</span> <strong style="color:var(--danger);">${modeVapeSpend.toFixed(2)} ${sym}</strong></div>`;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>${isTND ? `Vacation` : `Onboard`} Avg Cost:</span> <strong style="color:var(--text);">${modeAvgCost.toFixed(2)} ${sym} / Vape</strong></div>`;
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>True Burn Rate:</span> <strong style="color:var(--warning);">1 Vape / ${trueVapeBurnRate.toFixed(1)} Days</strong></div>`;
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Days Since Last Restock:</span> <strong style="${daysSinceLast < trueVapeBurnRate ? 'color:var(--success);' : 'color:var(--danger);'}">${purchaseDates.length > 0 ? daysSinceLast + ' Days (' + lastDateStr + ')' : 'No Data'}</strong></div>`;
-                 h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Current Stash Inventory:</span> <strong style="color:#a855f7;">${currentStash} Devices Ready</strong></div>`;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Days Since Last Restock:</span> <strong style="${daysSinceLast < trueVapeBurnRate ? `color:var(--success);` : `color:var(--danger);`}">${purchaseDates.length > 0 ? daysSinceLast + ` Days (` + lastDateStr + `)` : `No Data`}</strong></div>`;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Current Stash Inventory:</span> <strong style="color:#a855f7;">${currentStash} Devices Ready</strong></div>`;
         
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; border-top:1px dashed var(--panel-border); padding-top:6px; margin-top:6px;">`;
         h += `<span>Est. Phase Spend (${daysLeft} Days):</span>`;
         h += `<strong style="color:#38bdf8;">~${Math.ceil(vapesToBuy)} Vapes (${projectedSpend.toFixed(2)} ${sym})</strong></div>`;
-
-        // THE ARMORY INJECTION
-        h += `<div style="margin-top:15px; font-size:11px; font-weight:bold; color:var(--text); border-bottom:1px solid var(--panel-border); padding-bottom:4px;">🛡️ The Armory (Inventory)</div>`;
-        let inv = s.vape_stash.inventory || [];
         
-        let actives = inv.filter(v => v.status === 'active');
+        h += paydayProjHTML;
+
+        /* 4. THE ARMORY INJECTION */
+        h += `<div style="margin-top:15px; font-size:11px; font-weight:bold; color:var(--text); border-bottom:1px solid var(--panel-border); padding-bottom:4px;">🛡️ The Armory (Inventory)</div>`;
+        
+        let actives = inv.filter(v => v.status === `active`);
         if(actives.length > 0) {
             h += `<div style="margin-top:8px; color:var(--success); font-size:10px; font-weight:bold;">🟢 Active Units</div>`;
             actives.forEach(v => {
+                let activeDays = v.opened_ts ? ((Date.now() - v.opened_ts)/86400000).toFixed(1) : `?`;
                 h += `<div class="iou-item" style="padding:8px; border-color:var(--success);">`;
-                h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">${v.puffs ? v.puffs+' Puffs' : ''} ${v.ml ? v.ml+' ML' : ''}</div></div>`;
+                h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">${v.puffs ? v.puffs+` Puffs` : ``} ${v.ml ? v.ml+` ML` : ``} (Active: ${activeDays}d)</div></div>`;
                 h += `<div style="display:flex; gap:6px;">
                         <button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer;">✏️</button>
                         <button onclick="markVapeDead('${v.id}')" class="iou-btn" style="background:var(--danger); color:#fff; font-size:9px;">KILL</button>
@@ -4102,12 +4145,12 @@ if(document.getElementById('advVapeBrand')) {
             });
         }
         
-        let sealed = inv.filter(v => v.status === 'sealed');
+        let sealed = inv.filter(v => v.status === `sealed`);
         if(sealed.length > 0) {
             h += `<div style="margin-top:8px; color:#38bdf8; font-size:10px; font-weight:bold;">📦 Sealed Units</div>`;
             sealed.forEach(v => {
                 h += `<div class="iou-item" style="padding:8px; border-color:#38bdf8;">`;
-                h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">${v.puffs ? v.puffs+' Puffs' : ''} ${v.ml ? v.ml+' ML' : ''}</div></div>`;
+                h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">${v.puffs ? v.puffs+` Puffs` : ``} ${v.ml ? v.ml+` ML` : ``}</div></div>`;
                 h += `<div style="display:flex; gap:6px;">
                         <button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer;">✏️</button>
                         <button onclick="openSealedVape('${v.id}')" class="iou-btn" style="background:#38bdf8; color:#0f172a; font-size:9px;">OPEN</button>
@@ -4115,11 +4158,11 @@ if(document.getElementById('advVapeBrand')) {
             });
         }
         
-        let dead = inv.filter(v => v.status === 'dead').sort((a,b) => b.killed_ts - a.killed_ts);
+        let dead = inv.filter(v => v.status === `dead`).sort((a,b) => b.killed_ts - a.killed_ts);
         if(dead.length > 0) {
             h += `<div style="margin-top:8px; color:var(--text-muted); font-size:10px; font-weight:bold;">🪦 Graveyard (Last 5)</div>`;
             dead.slice(0, 5).forEach(v => {
-                let daysLived = v.opened_ts && v.killed_ts ? ((v.killed_ts - v.opened_ts)/86400000).toFixed(1) : '?';
+                let daysLived = v.opened_ts && v.killed_ts ? ((v.killed_ts - v.opened_ts)/86400000).toFixed(1) : `?`;
                 h += `<div class="iou-item" style="padding:8px; border-color:var(--panel-border); opacity:0.6;">`;
                 h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">Lived: ${daysLived} Days</div></div>`;
                 h += `<button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer;">✏️</button></div>`;
@@ -4128,6 +4171,7 @@ if(document.getElementById('advVapeBrand')) {
         
         document.getElementById('vapeStatsHtml').innerHTML = h;
     }
+
 
     function renderLeaderboard() {
         let locs = {}; 
