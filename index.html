@@ -5500,10 +5500,10 @@ async function deleteIncome(index) {
         let targetDateStr = document.getElementById('tmSpecificDate') ? document.getElementById('tmSpecificDate').value : document.getElementById('tmDate').value;
         if (!targetDateStr) return;
 
-        let desc = document.getElementById('tmTag').value; 
+        let desc = document.getElementById('tmTag').value;
         let amt = parseFloat(document.getElementById('tmAmount').value);
-        let cat = document.getElementById('tmCategory').value; 
-        let proj = document.getElementById('tmProject').value; 
+        let cat = document.getElementById('tmCategory').value;
+        let proj = document.getElementById('tmProject').value;
         let wallet = document.getElementById('tmSourceWallet').value;
         let actualDeduct = parseFloat(document.getElementById('tmActualDeduct').value);
         let fxStrat = document.getElementById('tmCurrencyToggle') ? document.getElementById('tmCurrencyToggle').value : 'TND';
@@ -5521,16 +5521,15 @@ async function deleteIncome(index) {
 
         let ship = parseFloat(document.getElementById('tmShipping').value) || 0;
         let tax = parseFloat(document.getElementById('tmTax').value) || 0;
-        
         if (!desc || isNaN(amt) || amt <= 0) return;
-        
-                let oldItem = (tmEditIndex > -1 && tmCurrentDayObj) ? tmCurrentDayObj.logs[tmEditIndex] : null;
+
+        let oldItem = (tmEditIndex > -1 && tmCurrentDayObj) ? tmCurrentDayObj.logs[tmEditIndex] : null;
         let logTime = oldItem ? oldItem.time : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-        // 1. DYNAMICALLY RECALCULATE BYPASS LIMIT
         let bypass = false;
         if (wallet !== 'default') bypass = true;
         if (cat === '💨 Vape') bypass = true;
+
         if (proj && proj !== 'none') {
             let pType = proj.substring(0, 3);
             let pKey = proj.substring(4);
@@ -5538,23 +5537,25 @@ async function deleteIncome(index) {
             if (pObj) bypass = pObj.bypass;
         }
 
-        let newItem = { 
-            time: logTime, 
-            desc: desc, 
-            amount: amt, 
-            category: cat, 
-            project: proj, 
-            wallet: wallet, 
+        let newItem = {
+            time: logTime,
+            desc: desc,
+            amount: amt,
+            category: cat,
+            project: proj,
+            wallet: wallet,
             actualDeduct: actualDeduct,
             shipping: ship,
             tax: tax,
             bankFx: bankFx,
             location: document.getElementById('tmLocation').value,
-            bypassLimit: bypass, 
-            spillover: oldItem ? oldItem.spillover : 0
+            bypassLimit: bypass,
+            spillover: oldItem ? oldItem.spillover : 0,
+            isSnsCharge: oldItem ? oldItem.isSnsCharge : false // PRESERVE S&S TAG
         };
-        
+
         let fx = parseFloat(s.fx_rate) || 2.923;
+
         let adjustCapital = (impact) => {
             if (s.mode === 'vacation') s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + impact;
             else s.capital_saved_tnd = (parseFloat(s.capital_saved_tnd) || 0) + (impact * fx);
@@ -5563,21 +5564,21 @@ async function deleteIncome(index) {
         // 2. TRUE EFFECTIVE DEDUCTION CALCULATOR
         let getEffDeduct = (itm) => (!itm.bypassLimit ? (parseFloat(itm.amount) || 0) : (parseFloat(itm.spillover) || 0));
 
-        if (oldItem) { 
+        if (oldItem) {
             let oldEff = getEffDeduct(oldItem);
             let newEff = getEffDeduct(newItem);
-            
+
             if (targetDateStr === tmCurrentDayObj.date) {
                 // SAME DAY EDIT
-                tmCurrentDayObj.logs[tmEditIndex] = newItem; 
+                tmCurrentDayObj.logs[tmEditIndex] = newItem;
                 let surplusImpact = oldEff - newEff;
-                tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact; 
+                tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + surplusImpact;
                 adjustCapital(surplusImpact);
             } else {
                 // TIME SHIFT PROTOCOL
                 tmCurrentDayObj.logs.splice(tmEditIndex, 1);
                 tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + oldEff;
-                adjustCapital(oldEff); 
+                adjustCapital(oldEff);
                 
                 let targetDayObj = s.history[s.mode].archive.find(x => x.date === targetDateStr);
                 if (!targetDayObj) {
@@ -5592,7 +5593,7 @@ async function deleteIncome(index) {
                     adjustCapital(-newEff);
                 }
             }
-        } else { 
+        } else {
             // NEW PAST EXPENSE
             let newEff = getEffDeduct(newItem);
             let targetDayObj = s.history[s.mode].archive.find(x => x.date === targetDateStr);
@@ -5603,23 +5604,19 @@ async function deleteIncome(index) {
                 s.history[s.mode].archive.sort((a,b) => new Date(a.date) - new Date(b.date));
                 adjustCapital(targetDayObj.surplus);
             } else {
-                targetDayObj.logs.unshift(newItem); 
-                targetDayObj.surplus = (parseFloat(targetDayObj.surplus) || 0) - newEff; 
+                targetDayObj.logs.unshift(newItem);
+                targetDayObj.surplus = (parseFloat(targetDayObj.surplus) || 0) - newEff;
                 adjustCapital(-newEff);
             }
         }
 
-        // --- WALLET AND PROJECT SYNCHRONIZATION ---
-
-
-        // --- WALLET AND PROJECT SYNCHRONIZATION ---
-        let targetWallet = wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : wallet;
-        let deductAmt = (!isNaN(actualDeduct) && actualDeduct > 0) ? actualDeduct : (amt + ship + tax);
-
+        // 3. EXECUTE FINANCIAL REFUND & DEDUCTION SHIFT
         if (oldItem) {
             let oldWallet = oldItem.wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : oldItem.wallet;
             let oldDeduct = (!isNaN(oldItem.actualDeduct) && oldItem.actualDeduct > 0) ? oldItem.actualDeduct : ((parseFloat(oldItem.amount)||0) + (parseFloat(oldItem.shipping)||0) + (parseFloat(oldItem.tax)||0));
-            if (s.vault[oldWallet] !== undefined) s.vault[oldWallet] += oldDeduct; 
+            
+            // BUG FIX: Do not refund the vault if this is an active S&S Charge
+            if (s.vault[oldWallet] !== undefined && !oldItem.isSnsCharge) s.vault[oldWallet] += oldDeduct;
             
             if (oldItem.project && oldItem.project !== 'none') {
                 let pType = oldItem.project.substring(0, 3);
@@ -5627,9 +5624,26 @@ async function deleteIncome(index) {
                 let pObj = pType === 'env' ? s.projects.envelopes[pKey] : (pType === 'mis' ? s.projects.missions[pKey] : null);
                 if (pObj) pObj.spent = Math.max(0, (parseFloat(pObj.spent) || 0) - (parseFloat(oldItem.amount) || 0));
             }
+
+            // S&S FOLIO EDIT SYNC
+            if (oldItem.isSnsCharge) {
+                s.sail_and_sign.tab = Math.max(0, (parseFloat(s.sail_and_sign.tab) || 0) - oldItem.amount + amt);
+                if (s.sail_and_sign.active_folio) {
+                    let cleanOldDesc = oldItem.desc.replace("[S&S] ", "");
+                    let fIdx = s.sail_and_sign.active_folio.findIndex(x => x.amount === oldItem.amount && x.desc === cleanOldDesc);
+                    if (fIdx > -1) {
+                        s.sail_and_sign.active_folio[fIdx].amount = amt;
+                        s.sail_and_sign.active_folio[fIdx].desc = desc.replace("[S&S] ", "");
+                    }
+                }
+            }
         }
         
-        if (s.vault[targetWallet] !== undefined) s.vault[targetWallet] -= deductAmt; 
+        let targetWallet = wallet === 'default' ? (s.mode === 'vacation' ? 'cash_tnd' : 'cash_usd') : wallet;
+        let deductAmt = (!isNaN(actualDeduct) && actualDeduct > 0) ? actualDeduct : ((parseFloat(amt)||0) + ship + tax);
+        
+        // BUG FIX: Do not deduct from the vault if this is an active S&S Charge
+        if (s.vault[targetWallet] !== undefined && !newItem.isSnsCharge) s.vault[targetWallet] -= deductAmt;
         
         if (proj && proj !== 'none') {
             let pType = proj.substring(0, 3);
@@ -5638,19 +5652,16 @@ async function deleteIncome(index) {
             if (pObj) pObj.spent = (parseFloat(pObj.spent) || 0) + amt;
         }
 
-        saveState(); 
-        cancelTMEdit(); 
-        
-        // Auto-follow the expense to the new date view!
+        saveState();
+        cancelTMEdit();
         document.getElementById('tmDate').value = targetDateStr;
         loadPastDay();
     }
-    
+
     function deleteExpense(i, src) {
         let surplusImpact = 0;
         let item = src === 'current' ? s.history[s.mode].current[i] : tmCurrentDayObj.logs[i];
         
-        // --- SYNCHRONIZE PROJECT REFUND UPON DELETION ---
         if (item.project && item.project !== 'none') {
             let pType = item.project.substring(0, 3);
             let pKey = item.project.substring(4);
@@ -5662,7 +5673,8 @@ async function deleteIncome(index) {
         if (item.isSnsCharge) {
             s.sail_and_sign.tab = Math.max(0, (parseFloat(s.sail_and_sign.tab) || 0) - item.amount);
             if (s.sail_and_sign.active_folio) {
-                let fIdx = s.sail_and_sign.active_folio.findIndex(x => x.amount === item.amount && "[S&S] " + x.desc === item.desc);
+                let cleanOldDesc = item.desc.replace("[S&S] ", "");
+                let fIdx = s.sail_and_sign.active_folio.findIndex(x => x.amount === item.amount && x.desc === cleanOldDesc);
                 if (fIdx > -1) s.sail_and_sign.active_folio.splice(fIdx, 1);
             }
         }
@@ -5680,10 +5692,12 @@ async function deleteIncome(index) {
             }
             let refundAmt = (!isNaN(item.actualDeduct) && item.actualDeduct > 0) ? item.actualDeduct : ((parseFloat(item.amount)||0) + (parseFloat(item.shipping)||0) + (parseFloat(item.tax)||0));
             
-            if (s.vault[refundWallet] !== undefined) s.vault[refundWallet] += refundAmt;
+            // BUG FIX: Do not refund if S&S Charge
+            if (s.vault[refundWallet] !== undefined && !item.isSnsCharge) s.vault[refundWallet] += refundAmt;
+            
             s.history[s.mode].current.splice(i, 1); 
 
-            } else { 
+        } else { 
             let effRefund = (!item.bypassLimit) ? (parseFloat(item.amount) || 0) : (parseFloat(item.spillover) || 0);
             
             tmCurrentDayObj.surplus = (parseFloat(tmCurrentDayObj.surplus) || 0) + effRefund; 
@@ -5703,7 +5717,9 @@ async function deleteIncome(index) {
             }
             let refundAmt = (!isNaN(item.actualDeduct) && item.actualDeduct > 0) ? item.actualDeduct : ((parseFloat(item.amount)||0) + (parseFloat(item.shipping)||0) + (parseFloat(item.tax)||0));
 
-            if (s.vault[refundWallet] !== undefined) s.vault[refundWallet] += refundAmt;
+            // BUG FIX: Do not refund if S&S Charge
+            if (s.vault[refundWallet] !== undefined && !item.isSnsCharge) s.vault[refundWallet] += refundAmt;
+            
             tmCurrentDayObj.logs.splice(i, 1); 
         }
         
