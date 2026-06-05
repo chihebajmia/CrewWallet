@@ -688,6 +688,45 @@
                 </button>
             </div>
 
+                        <!-- SAIL & SIGN SUB-LEDGER CARD -->
+            <div id="snsCard" class="vault-card" style="display:none; border-color:#38bdf8;">
+                <div class="vault-header" style="color:#38bdf8; margin-bottom:6px;">
+                    <span>🚢 Onboard Sail & Sign Tab</span>
+                    <strong id="snsLimitDisplay" onclick="adjustSnsLimit()" style="cursor:pointer; color:var(--accent);">Limit: $50.00 ⚙️</strong>
+                </div>
+                
+                <div onclick="toggleSnsFolio()" style="background:var(--vault-bg); padding:12px; border-radius:12px; border:1px solid var(--panel-border); cursor:pointer; text-align:center;">
+                    <div style="font-size:10px; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">Running Liability Tally</div>
+                    <div id="snsTabDisplay" style="font-size:26px; font-weight:800; color:var(--danger); margin:4px 0;">$0.00</div>
+                    
+                    <div class="progress-container" style="background-color:#1e293b; height:8px; border-radius:4px; margin-top:6px;">
+                        <div id="snsProgressBar" class="progress-bar" style="width:0%; background-color:var(--success);"></div>
+                    </div>
+                    <div id="snsFolioHint" style="font-size:8px; color:var(--text-muted); margin-top:6px; font-style:italic;">ℹ️ Tap card to toggle Itemized Folio statement view</div>
+                </div>
+
+                <!-- ITEMISED FOLIO DRAWER -->
+                <div id="snsFolioDrawer" style="display:none; margin-top:10px; background:rgba(0,0,0,0.2); padding:8px; border-radius:8px; border:1px dashed var(--panel-border);">
+                    <div style="font-size:9px; color:var(--text-muted); font-weight:bold; text-transform:uppercase; margin-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:4px;">Unsettled Voyage Folio Items</div>
+                    <div id="snsFolioList" class="scrollable-list" style="max-height:120px;"></div>
+                </div>
+
+                <!-- GHOST HOLDS TRACKER -->
+                <div id="snsHoldsDrawer" style="display:none; margin-top:10px; background:rgba(248,113,113,0.05); padding:8px; border-radius:8px; border:1px solid rgba(248,113,113,0.15);">
+                    <div style="font-size:9px; color:var(--danger); font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Active Pre-Auth Ghost Holds</div>
+                    <div id="snsHoldsList"></div>
+                </div>
+
+                <!-- CARD ACTIONS -->
+                <div class="vault-actions" style="grid-template-columns: repeat(2, 1fr); margin-top:10px;">
+                    <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="logShipExpensePrompt()">💳 Log Ship Expense</button>
+                    <button class="v-btn" style="background:#16a34a;" onclick="depositSnsCashPrompt()">💵 Deposit Kiosk Cash</button>
+                    <button class="v-btn" style="background:rgba(248,113,113,0.1); color:var(--danger); border:1px solid var(--danger); font-size:9px; padding:6px 0;" onclick="logGhostHoldPrompt()">🔒 Log Pending Hold</button>
+                    <button class="v-btn" style="background:var(--warning); color:#000; font-size:9px; padding:6px 0;" onclick="endVoyageSns()">🛑 End Voyage (Clear Tab)</button>
+                </div>
+            </div>
+
+
             <!-- LOG EXPENSE FORM -->
             <div class="form-panel">
                 <div class="input-row">
@@ -2146,7 +2185,16 @@
         // 9. EXECUTE MATHEMATICAL UPDATES
         processInterestBleed();
         processVacationArrears();
-        
+                /* --- INITIALIZE SAIL & SIGN SUB-LEDGER --- */
+        if (!s.sail_and_sign) {
+            s.sail_and_sign = {
+                tab: 0,
+                limit: 50,
+                active_folio: [],
+                ghost_holds: []
+            };
+        }
+
         // 10. BOOT THE APP
         checkLock();
 
@@ -3146,6 +3194,57 @@ function setPaycheckWizardType(type) {
         document.getElementById('spilloverAlert').style.display = hasSpillover ? 'block' : 'none';
         
         updateDynamicCountdown();
+                /* --- RENDER SAIL & SIGN MODULE CONTROLS --- */
+        let snsCard = document.getElementById("snsCard");
+        if (snsCard) {
+            if (s.mode === "onboard") {
+                snsCard.style.display = "block";
+                
+                // Update math texts
+                let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
+                let activeLimit = parseFloat(s.sail_and_sign.limit) || 50;
+                let barPct = Math.min((currentTab / activeLimit) * 100, 100);
+                
+                document.getElementById("snsTabDisplay").innerText = "$" + currentTab.toFixed(2);
+                document.getElementById("snsLimitDisplay").innerText = "Limit: $" + activeLimit.toFixed(2) + " ⚙️";
+                
+                let pBar = document.getElementById("snsProgressBar");
+                pBar.style.width = barPct + "%";
+                if (barPct >= 90) pBar.style.backgroundColor = "var(--danger)";
+                else if (barPct >= 60) pBar.style.backgroundColor = "var(--warning)";
+                else pBar.style.backgroundColor = "var(--success)";
+                
+                // Draw Itemised Folio View
+                let folioHtml = "";
+                let fItems = s.sail_and_sign.active_folio || [];
+                fItems.forEach(item => {
+                    folioHtml += "<div style='display:flex; justify-content:space-between; font-size:11px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.02);'>";
+                    folioHtml += "<span>" + item.desc + "</span>";
+                    folioHtml += "<strong style='color:var(--danger);'>$" + item.amount.toFixed(2) + "</strong></div>";
+                });
+                document.getElementById("snsFolioList").innerHTML = folioHtml || "<div style='font-size:10px; color:var(--text-muted); text-align:center; padding:4px 0;'>No active charges logged on tab.</div>";
+                
+                // Draw Ghost Holds Bin
+                let holdsHtml = "";
+                let hItems = s.sail_and_sign.ghost_holds || [];
+                let holdsDrawer = document.getElementById("snsHoldsDrawer");
+                if (hItems.length > 0) {
+                    holdsDrawer.style.display = "block";
+                    hItems.forEach((hold, hIdx) => {
+                        holdsHtml += "<div style='display:flex; justify-content:space-between; align-items:center; font-size:10px; padding:3px 0;'>";
+                        holdsHtml += "<span>🔒 Hold (" + hold.date + ")</span>";
+                        holdsHtml += "<div><strong style='color:var(--danger); margin-right:8px;'>$" + hold.amount.toFixed(2) + "</strong>";
+                        holdsHtml += "<button class='iou-btn' style='padding:2px 6px; font-size:8px; background:var(--success); color:#000;' onclick='dropGhostHold(" + hIdx + ")'>Drop</button></div></div>";
+                    });
+                    document.getElementById("snsHoldsList").innerHTML = holdsHtml;
+                } else {
+                    holdsDrawer.style.display = "none";
+                }
+            } else {
+                snsCard.style.display = "none";
+            }
+        }
+
                 // WIRE TRANSIT BUTTON UPDATE
         let uiWireBtn = document.getElementById('uiPendingWires');
         if (uiWireBtn) {
@@ -4864,6 +4963,161 @@ function processPaycheck() {
         document.getElementById('stbModal').style.display = 'none';
     }
 
+        /* ========================================== */
+    /* SAIL & SIGN ENGINE CORE MATHEMATICS       */
+    /* ========================================== */
+    function toggleSnsFolio() {
+        let el = document.getElementById("snsFolioDrawer");
+        el.style.display = el.style.display === "block" ? "none" : "block";
+    }
+
+    async function adjustSnsLimit() {
+        let currentLimit = s.sail_and_sign.limit || 50;
+        let val = await openUPrompt("Adjust S&S Limit", "Enter maximum credit allowance threshold scale parameters ($):", currentLimit);
+        if (val === null) return;
+        let parsed = parseFloat(val);
+        if (!isNaN(parsed) && parsed > 0) {
+            s.sail_and_sign.limit = parsed;
+            saveState();
+        }
+    }
+
+    async function logShipExpensePrompt() {
+        let desc = await openUPrompt("Log Ship Expense", "Enter charge item context description (e.g. Crew Mess Coffee):");
+        if (!desc || desc.trim() === "") return;
+        let costStr = await openUPrompt("Expense Cost", "Enter exact purchase cost ($):");
+        if (costStr === null) return;
+        let cost = parseFloat(costStr);
+        if (isNaN(cost) || cost <= 0) return alert("Invalid amount parameter.");
+
+        // 1. Process against standard behavioral runtime runway
+        s.history.onboard.balance -= cost;
+
+        // 2. Queue into active operational folio logs
+        s.sail_and_sign.tab = (parseFloat(s.sail_and_sign.tab) || 0) + cost;
+        if (!s.sail_and_sign.active_folio) s.sail_and_sign.active_folio = [];
+        s.sail_and_sign.active_folio.push({ desc: desc.trim(), amount: cost });
+
+        // 3. Document receipt on standard activity array
+        s.history.onboard.current.unshift({
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            desc: "[S&S] " + desc.trim(),
+            amount: cost,
+            category: "Utilities & Tech",
+            project: "none",
+            bypassLimit: false,
+            spillover: 0,
+            wallet: "brightwell",
+            actualDeduct: cost,
+            location: "Vessel Profile Tab",
+            isSnsCharge: true,
+            dateStr: new Date().toISOString()
+        });
+
+        saveState();
+        checkSnsAutoSweep();
+    }
+
+    function checkSnsAutoSweep() {
+        let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
+        let limitThreshold = parseFloat(s.sail_and_sign.limit) || 50;
+        
+        if (currentTab >= limitThreshold) {
+            executeSnsBrightwellSweep(currentTab, "Auto Threshold Settle");
+        }
+    }
+
+    function executeSnsBrightwellSweep(sweepAmt, settlementContext) {
+        // Charge core funding pipeline ledger vault
+        s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) - sweepAmt;
+        
+        // Push verification receipt to income logging ledger timeline
+        let timestampId = "sns_settle_" + Date.now();
+        s.income_logs.unshift({
+            id: timestampId,
+            date: new Date().toLocaleDateString("en-CA"),
+            amount: sweepAmt,
+            source: "custom",
+            wallet: "Brightwell Card",
+            desc: "✅ S&S Tab Cleared: $" + sweepAmt.toFixed(2) + " [" + settlementContext + "]",
+            isSnsSettlementRecord: true,
+            restoredTabAmount: sweepAmt,
+            restoredFolioBackup: [...(s.sail_and_sign.active_folio || [])]
+        });
+
+        // Flush running totals clean
+        s.sail_and_sign.tab = 0;
+        s.sail_and_sign.active_folio = [];
+        saveState();
+    }
+
+    async function depositSnsCashPrompt() {
+        let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
+        let amtStr = await openUPrompt("Deposit Cash to S&S", "Enter amount of physical USD cash fed into kiosk ($):");
+        if (amtStr === null) return;
+        let cashAmt = parseFloat(amtStr);
+        if (isNaN(cashAmt) || cashAmt <= 0) return alert("Numeric values required.");
+        
+        if ((parseFloat(s.vault.cash_usd) || 0) < cashAmt) {
+            return alert("Insufficient funds in Cash USD vault.");
+        }
+
+        // Deduct from physical storage vault
+        s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) - cashAmt;
+
+        // Apply credit baseline adjustment
+        s.sail_and_sign.tab = Math.max(0, currentTab - cashAmt);
+        s.sail_and_sign.active_folio.push({ desc: "💵 Cash Deposit Credit", amount: -cashAmt });
+
+        if (currentTab > 0) {
+            let syncIssue = await openUConfirm("Reconciliation Check", "Did Carnival instantly charge Brightwell for the remaining balance of the tab?");
+            if (syncIssue) {
+                let remainingTabValue = currentTab - cashAmt;
+                if (remainingTabValue > 0) {
+                    executeSnsBrightwellSweep(remainingTabValue, "Kiosk Out-of-Sync Audit");
+                } else {
+                    s.sail_and_sign.tab = 0;
+                    s.sail_and_sign.active_folio = [];
+                }
+            }
+        }
+        saveState();
+    }
+
+    async function endVoyageSns() {
+        let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
+        let confirmAction = await openUConfirm("Turnaround Day Reset", "Clear Sail & Sign slate for this voyage? This sweeps outstanding balances ($" + currentTab.toFixed(2) + ") from Brightwell.");
+        if (confirmAction) {
+            executeSnsBrightwellSweep(currentTab, "Voyage Turnaround Clear");
+        }
+    }
+
+    async function logGhostHoldPrompt() {
+        let amtStr = await openUPrompt("Log Pre-Auth Hold", "Enter holding hold valuation verification fee amount ($):", "2.50");
+        if (amtStr === null) return;
+        let holdAmt = parseFloat(amtStr);
+        if (isNaN(holdAmt) || holdAmt <= 0) return alert("Numeric values required.");
+
+        s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) - holdAmt;
+        if (!s.sail_and_sign.ghost_holds) s.sail_and_sign.ghost_holds = [];
+        
+        s.sail_and_sign.ghost_holds.push({
+            date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            amount: holdAmt
+        });
+        saveState();
+    }
+
+    function dropGhostHold(index) {
+        let hold = s.sail_and_sign.ghost_holds[index];
+        if (hold) {
+            s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + hold.amount;
+            s.sail_and_sign.ghost_holds.splice(index, 1);
+            saveState();
+        }
+    }
+
+
     // ==========================================
     // 12. TRANSFERS, INCOMES, AND ATMS
     // ==========================================
@@ -4968,6 +5222,23 @@ async function deleteIncome(index) {
     let c = await openUConfirm("Delete Income", "Delete this record and reverse its effect on your balances?");
     if (!c) return;
 
+    /* SAIL & SIGN SETTLEMENT REVERSAL ENGINE */
+    if (log.isSnsSettlementRecord) {
+        s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + parseFloat(log.restoredTabAmount);
+        s.sail_and_sign.tab = parseFloat(log.restoredTabAmount);
+        s.sail_and_sign.active_folio = log.restoredFolioBackup || [];
+        s.income_logs.splice(index, 1);
+        saveState();
+        
+        if (document.getElementById('tab-dash').classList.contains('active')) {
+            renderDashboard();
+        } else {
+            renderContractTracker();
+            renderIncomeLogs();
+        }
+        return;
+    }
+
     if (log.source === 'paycheck') {
         let opMatch = log.desc.match(/Op: \$([0-9.]+)/);
         let stbMatch = log.desc.match(/STB: \$([0-9.]+)/);
@@ -5038,6 +5309,7 @@ async function deleteIncome(index) {
         renderIncomeLogs();
     }
 }
+
 
     function openTransferModal() { 
         document.getElementById('trfAmount').value = ''; 
@@ -5386,6 +5658,15 @@ async function deleteIncome(index) {
             if (pObj) pObj.spent = Math.max(0, (parseFloat(pObj.spent) || 0) - (parseFloat(item.amount) || 0));
         }
 
+        /* --- SAIL & SIGN REVERSAL INTERCEPTOR --- */
+        if (item.isSnsCharge) {
+            s.sail_and_sign.tab = Math.max(0, (parseFloat(s.sail_and_sign.tab) || 0) - item.amount);
+            if (s.sail_and_sign.active_folio) {
+                let fIdx = s.sail_and_sign.active_folio.findIndex(x => x.amount === item.amount && "[S&S] " + x.desc === item.desc);
+                if (fIdx > -1) s.sail_and_sign.active_folio.splice(fIdx, 1);
+            }
+        }
+
         if (src === 'current') { 
             if (!item.bypassLimit) {
                 s.history[s.mode].balance = (parseFloat(s.history[s.mode].balance) || 0) + (parseFloat(item.amount) || 0); 
@@ -5429,6 +5710,7 @@ async function deleteIncome(index) {
         saveState(); 
         if (src !== 'current') loadPastDay();
     }
+
 
     function searchLogs() {
         let q = document.getElementById('tmSearch').value.toLowerCase(); 
