@@ -1239,6 +1239,7 @@
                 <button class="btn-secondary" onclick="exportData()" style="color:var(--text);">💾 Export JSON Backup</button>
                 <input type="file" id="importFile" style="display:none;" onchange="importData(event)" accept=".json">
                 <button class="btn-secondary" onclick="document.getElementById('importFile').click()" style="color:var(--text);">📂 Restore from Backup</button>
+                <button class="btn-secondary" onclick="forceUpdateApp()" style="margin-top: 10px; border-color: var(--success); color: var(--success); background: rgba(74, 222, 128, 0.1);">🔄 Force App Update (Clear Cache)</button>
                 <button class="btn-secondary" onclick="recalibrateMath()" style="margin-top: 10px; border-color: var(--warning); color: var(--warning);">🧮 Recalibrate Database Math</button>
                 <button class="btn-secondary" onclick="factoryReset()" style="margin-top: 10px; border-color: var(--danger); color: var(--danger); background: rgba(248, 113, 113, 0.1);">🗑️ Factory Reset App</button>
             </div>
@@ -6179,6 +6180,28 @@ async function deleteIncome(index) {
         setTimeout(() => { w.print(); }, 500);
     }
 
+
+        async function forceUpdateApp() {
+        let c = await openUConfirm("Force App Update", "This will delete the app's offline cache and force a fresh download from the server. (Your financial data is safe). Proceed?");
+        if (!c) return;
+        
+        try {
+            if ('serviceWorker' in navigator) {
+                let regs = await navigator.serviceWorker.getRegistrations();
+                for (let r of regs) { await r.unregister(); }
+            }
+            if ('caches' in window) {
+                let cacheNames = await caches.keys();
+                for (let name of cacheNames) { await caches.delete(name); }
+            }
+            alert("Cache wiped. Reloading from server...");
+            window.location.reload(true);
+        } catch (e) {
+            alert("Update failed. You may need to manually clear Safari website data.");
+        }
+    }
+
+    
     function exportData() {
         let dataStr = JSON.stringify(s);
         let dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
