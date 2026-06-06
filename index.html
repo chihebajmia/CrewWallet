@@ -951,14 +951,19 @@
                     </div>
                 </div>
 
-                <div style="margin-top:15px; padding-top:10px; border-top:1px dashed rgba(74, 222, 128, 0.3);">
+                    <div style="margin-top:15px; padding-top:10px; border-top:1px dashed rgba(74, 222, 128, 0.3);">
                     <div class="title" style="justify-content:center; color:var(--text);">
                         📊 Avg Daily Spend (<span id="uiAvgSpendMode">Vacation</span>)
                     </div>
                     <div style="font-size: 16px; font-weight: bold; color: var(--accent);" id="uiAvgSpend">
                         0.00 TND
                     </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:8px; border-top:1px dashed var(--panel-border);">
+                        <span style="font-size:10px; color:var(--text-muted);">True Average (Incl. Projects & Vapes):</span>
+                        <strong style="font-size:13px; color:var(--danger);" id="uiTrueAvgSpend">0.00 TND</strong>
+                    </div>
                 </div>
+
             </div>
 
             <div class="vault-card" style="border-color: #a855f7;">
@@ -2749,40 +2754,57 @@ function setPaycheckWizardType(type) {
         // Average Overall Mode Spend
         let modeArch = s.history[s.mode].archive || [];
         let totalModeSpend = 0; 
+        let trueTotalModeSpend = 0;
         let validModeDays = 0;
         
         modeArch.forEach(day => { 
-            let spent = (day.logs || []).reduce((sum, item) => {
+            let spent = 0;
+            let trueSpent = 0;
+            (day.logs || []).forEach(item => {
                 let amt = parseFloat(item.amount) || 0;
                 let spl = parseFloat(item.spillover) || 0;
-                if (item.category === "🏦 Financial & Fees") return sum;
-                return sum + (item.bypassLimit ? spl : amt);
-            }, 0);
+                if (item.category !== "🏦 Financial & Fees") {
+                    spent += (item.bypassLimit ? spl : amt);
+                    trueSpent += amt;
+                }
+            });
             totalModeSpend += spent; 
+            trueTotalModeSpend += trueSpent;
             validModeDays++; 
         });
-        
-        let spentToday = (s.history[s.mode].current || []).reduce((sum, item) => {
+
+        let spentToday = 0;
+        let trueSpentToday = 0;
+        (s.history[s.mode].current || []).forEach(item => {
             let amt = parseFloat(item.amount) || 0;
             let spl = parseFloat(item.spillover) || 0;
-            if (item.category === "🏦 Financial & Fees") return sum;
-            return sum + (item.bypassLimit ? spl : amt);
-        }, 0);
+            if (item.category !== "🏦 Financial & Fees") {
+                spentToday += (item.bypassLimit ? spl : amt);
+                trueSpentToday += amt;
+            }
+        });
 
         if (s.history[s.mode].current && s.history[s.mode].current.length > 0) { 
-            totalModeSpend += spentToday; 
+            totalModeSpend += spentToday;
+            trueTotalModeSpend += trueSpentToday;
             validModeDays++; 
         }
 
         let avgSpend = validModeDays > 0 ? (totalModeSpend / validModeDays) : 0;
-        let sym = s.mode === 'vacation' ? ' TND' : ' USD';
+        let trueAvgSpend = validModeDays > 0 ? (trueTotalModeSpend / validModeDays) : 0;
         
+        let sym = s.mode === 'vacation' ? ' TND' : ' USD';
         let avgEl = document.getElementById('uiAvgSpend');
         if (avgEl) { 
-            avgEl.innerText = avgSpend.toFixed(2) + sym; 
+            avgEl.innerText = avgSpend.toFixed(2) + sym;
             document.getElementById('uiAvgSpendMode').innerText = s.mode === 'vacation' ? 'Vacation' : 'Onboard'; 
         }
-    }
+        
+        let trueAvgEl = document.getElementById('uiTrueAvgSpend');
+        if (trueAvgEl) {
+            trueAvgEl.innerText = trueAvgSpend.toFixed(2) + sym;
+        }
+
 
     function checkVapeField(prefix) {
         let cat = document.getElementById(prefix + 'Category').value;
