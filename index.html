@@ -1824,6 +1824,14 @@
     if (!navigator.onLine) {
         document.getElementById('offlineBadge').style.display = 'inline';
     }
+        /* iOS WAKE-UP HOOK (Suspended Animation Shield) */
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && s !== null) {
+            checkAutoRollover();
+            renderDashboard();
+        }
+    });
+
 
     // ==========================================
     // 1. DATA, INDEXED-DB & BASELINE (V38.2)
@@ -3325,10 +3333,17 @@ function setPaycheckWizardType(type) {
         saveState();
     }
 
-    function changeMode() { 
-        s.mode = document.getElementById('setMode').value; 
-        saveState(); 
+    async function changeMode() { 
+        let newMode = document.getElementById('setMode').value; 
+        let c = await openUPrompt("RESTRICTED ACTION", "Changing modes alters daily limits and currencies. Type 'CONFIRM' to proceed:");
+        if (c !== 'CONFIRM') {
+            document.getElementById('setMode').value = s.mode; // Revert dropdown back to safe state
+            return;
+        }
+        s.mode = newMode; 
+        saveState();
     }
+
 
     function updateLimits() {
         s.history.vacation.limit = parseFloat(document.getElementById('setVacLimit').value) || 35;
