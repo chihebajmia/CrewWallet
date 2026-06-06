@@ -2964,10 +2964,11 @@ function setPaycheckWizardType(type) {
                 }
             });
 
-            if (spent <= activeLimit) {
+            if (spent <= activeLimit && spent > 0) {
                 totalSafeSpend += spent;
                 safeDaysList.push({ date: day.d, limit: activeLimit, spent: spent, cats: cats, mode: day.m });
             }
+
         });
 
         let avgSpend = safeDaysList.length > 0 ? (totalSafeSpend / safeDaysList.length) : 0;
