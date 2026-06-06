@@ -688,21 +688,22 @@
                 </button>
             </div>
 
-                        <!-- SAIL & SIGN SUB-LEDGER CARD -->
+                                    <!-- SAIL & SIGN SUB-LEDGER CARD -->
             <div id="snsCard" class="vault-card" style="display:none; border-color:#38bdf8;">
                 <div class="vault-header" style="color:#38bdf8; margin-bottom:6px;">
                     <span>🚢 Onboard Sail & Sign Tab</span>
                     <strong id="snsLimitDisplay" onclick="adjustSnsLimit()" style="cursor:pointer; color:var(--accent);">Limit: $50.00 ⚙️</strong>
                 </div>
                 
-                <div onclick="toggleSnsFolio()" style="background:var(--vault-bg); padding:12px; border-radius:12px; border:1px solid var(--panel-border); cursor:pointer; text-align:center;">
+                <div onclick="overrideSnsTab()" style="background:var(--vault-bg); padding:12px; border-radius:12px; border:1px solid var(--panel-border); cursor:pointer; text-align:center; position:relative;">
+                    <button onclick="toggleSnsFolio(); event.stopPropagation();" style="position:absolute; top:8px; right:8px; background:none; border:none; font-size:16px; color:var(--text-muted);">📋</button>
                     <div style="font-size:10px; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">Running Liability Tally</div>
                     <div id="snsTabDisplay" style="font-size:26px; font-weight:800; color:var(--danger); margin:4px 0;">$0.00</div>
                     
                     <div class="progress-container" style="background-color:#1e293b; height:8px; border-radius:4px; margin-top:6px;">
                         <div id="snsProgressBar" class="progress-bar" style="width:0%; background-color:var(--success);"></div>
                     </div>
-                    <div id="snsFolioHint" style="font-size:8px; color:var(--text-muted); margin-top:6px; font-style:italic;">ℹ️ Tap card to toggle Itemized Folio statement view</div>
+                    <div style="font-size:8px; color:var(--text-muted); margin-top:6px; font-style:italic;">ℹ️ Tap number to manual override. Tap 📋 for Folio.</div>
                 </div>
 
                 <!-- ITEMISED FOLIO DRAWER -->
@@ -717,14 +718,16 @@
                     <div id="snsHoldsList"></div>
                 </div>
 
-                <!-- CARD ACTIONS -->
+                <!-- CARD ACTIONS (UPDATED GRID) -->
                 <div class="vault-actions" style="grid-template-columns: repeat(2, 1fr); margin-top:10px;">
                     <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="logShipExpensePrompt()">💳 Log Ship Expense</button>
                     <button class="v-btn" style="background:#16a34a;" onclick="depositSnsCashPrompt()">💵 Deposit Kiosk Cash</button>
-                    <button class="v-btn" style="background:rgba(248,113,113,0.1); color:var(--danger); border:1px solid var(--danger); font-size:9px; padding:6px 0;" onclick="logGhostHoldPrompt()">🔒 Log Pending Hold</button>
-                    <button class="v-btn" style="background:var(--warning); color:#000; font-size:9px; padding:6px 0;" onclick="endVoyageSns()">🛑 End Voyage (Clear Tab)</button>
+                    <button class="v-btn" style="background:var(--card-bg); color:var(--success); border:1px solid var(--success);" onclick="withdrawSnsCashPrompt()">🏧 Withdraw S&S Cash</button>
+                    <button class="v-btn" style="background:rgba(248,113,113,0.1); color:var(--danger); border:1px solid var(--danger);" onclick="logGhostHoldPrompt()">🔒 Log Pending Hold</button>
+                    <button class="v-btn" style="background:var(--warning); color:#000; grid-column: span 2;" onclick="endVoyageSns()">🛑 End Voyage (Clear Tab)</button>
                 </div>
             </div>
+
 
 
             <!-- LOG EXPENSE FORM -->
@@ -3203,10 +3206,19 @@ function setPaycheckWizardType(type) {
                 // Update math texts
                 let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
                 let activeLimit = parseFloat(s.sail_and_sign.limit) || 50;
-                let barPct = Math.min((currentTab / activeLimit) * 100, 100);
+                let barPct = currentTab > 0 ? Math.min((currentTab / activeLimit) * 100, 100) : 0;
                 
-                document.getElementById("snsTabDisplay").innerText = "$" + currentTab.toFixed(2);
+                let tabDisplay = document.getElementById("snsTabDisplay");
+                if (currentTab < 0) {
+                    tabDisplay.innerText = "Credit: $" + Math.abs(currentTab).toFixed(2);
+                    tabDisplay.style.color = "var(--success)";
+                } else {
+                    tabDisplay.innerText = "Owe: $" + currentTab.toFixed(2);
+                    tabDisplay.style.color = "var(--danger)";
+                }
+
                 document.getElementById("snsLimitDisplay").innerText = "Limit: $" + activeLimit.toFixed(2) + " ⚙️";
+
                 
                 let pBar = document.getElementById("snsProgressBar");
                 pBar.style.width = barPct + "%";
@@ -5062,27 +5074,54 @@ function processPaycheck() {
             return alert("Insufficient funds in Cash USD vault.");
         }
 
-        // Deduct from physical storage vault
         s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) - cashAmt;
 
-        // Apply credit baseline adjustment
-        s.sail_and_sign.tab = Math.max(0, currentTab - cashAmt);
+        // Unlocked Math: Allows the tab to plunge into the negatives (Prepaid Credit)
+        s.sail_and_sign.tab = currentTab - cashAmt;
+        if (!s.sail_and_sign.active_folio) s.sail_and_sign.active_folio = [];
         s.sail_and_sign.active_folio.push({ desc: "💵 Cash Deposit Credit", amount: -cashAmt });
 
+        // Only check for Brightwell sync issues if you were paying off an actual liability
         if (currentTab > 0) {
-            let syncIssue = await openUConfirm("Reconciliation Check", "Did Carnival instantly charge Brightwell for the remaining balance of the tab?");
+            let syncIssue = await openUConfirm("Reconciliation Check", "Did Carnival instantly charge Brightwell for your prior balance before applying this cash?");
             if (syncIssue) {
-                let remainingTabValue = currentTab - cashAmt;
-                if (remainingTabValue > 0) {
-                    executeSnsBrightwellSweep(remainingTabValue, "Kiosk Out-of-Sync Audit");
-                } else {
-                    s.sail_and_sign.tab = 0;
-                    s.sail_and_sign.active_folio = [];
-                }
+                executeSnsBrightwellSweep(currentTab, "Kiosk Out-of-Sync Audit");
+                // Because Brightwell paid the original debt, your new cash is 100% pure credit
+                s.sail_and_sign.tab = -cashAmt; 
             }
         }
         saveState();
     }
+
+    async function withdrawSnsCashPrompt() {
+        let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
+        let amtStr = await openUPrompt("Withdraw Cash from S&S", "Enter amount of physical USD cash withdrawn from Casino/Kiosk ($):");
+        if (amtStr === null) return;
+        let cashAmt = parseFloat(amtStr);
+        if (isNaN(cashAmt) || cashAmt <= 0) return alert("Numeric values required.");
+
+        s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) + cashAmt;
+        
+        // Withdrawing cash eats your credit or adds to your liability
+        s.sail_and_sign.tab = currentTab + cashAmt;
+        if (!s.sail_and_sign.active_folio) s.sail_and_sign.active_folio = [];
+        s.sail_and_sign.active_folio.push({ desc: "🏧 Cash Withdrawal", amount: cashAmt });
+
+        saveState();
+        checkSnsAutoSweep();
+    }
+
+    async function overrideSnsTab() {
+        let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
+        let val = await openUPrompt("Override S&S Tab", "Manually fix your S&S running balance.\n(Use a minus sign '-' if you have prepaid credit):", currentTab.toFixed(2));
+        if (val === null) return;
+        let parsed = parseFloat(val);
+        if (!isNaN(parsed)) {
+            s.sail_and_sign.tab = parsed;
+            saveState();
+        }
+    }
+
 
     async function endVoyageSns() {
         let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
@@ -5671,7 +5710,7 @@ async function deleteIncome(index) {
 
         /* --- SAIL & SIGN REVERSAL INTERCEPTOR --- */
         if (item.isSnsCharge) {
-            s.sail_and_sign.tab = Math.max(0, (parseFloat(s.sail_and_sign.tab) || 0) - item.amount);
+            s.sail_and_sign.tab = (parseFloat(s.sail_and_sign.tab) || 0) - item.amount;
             if (s.sail_and_sign.active_folio) {
                 let cleanOldDesc = item.desc.replace("[S&S] ", "");
                 let fIdx = s.sail_and_sign.active_folio.findIndex(x => x.amount === item.amount && x.desc === cleanOldDesc);
