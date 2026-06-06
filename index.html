@@ -1835,6 +1835,25 @@
         }
     });
 
+        /* GLOBAL DOUBLE-TAP SHIELD (CAPTURE PHASE) */
+    let isAppLocked = false;
+    document.addEventListener('click', function(e) {
+        let btn = e.target.closest('button');
+        if (btn) {
+            // 1. If the app is already locked, kill the click instantly before it executes
+            if (isAppLocked) {
+                e.preventDefault();
+                e.stopPropagation();
+                return; 
+            }
+            // 2. If it is a major transactional button, lock the app for 800ms
+            if (btn.classList.contains('v-btn') || btn.classList.contains('btn-action') || btn.classList.contains('btn-secondary') || btn.classList.contains('iou-btn')) {
+                isAppLocked = true;
+                setTimeout(() => { isAppLocked = false; }, 800);
+            }
+        }
+    }, true);
+
 
     // ==========================================
     // 1. DATA, INDEXED-DB & BASELINE (V38.2)
