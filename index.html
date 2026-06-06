@@ -1255,13 +1255,16 @@
                     <span>💰 Gross Assets:</span> 
                     <strong id="diagGross">0.00</strong>
                 </div>
-                <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--danger); margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--danger); margin-bottom:4px;">
                     <span>🔒 Earmarked:</span> 
                     <span id="diagEarmarked">-0.00</span>
                 </div>
-                <div style="font-size:9px; color:var(--text-muted); text-align:right; margin-bottom:12px;">
-                    (Envelopes, Vapes & Buffers)
+                <div style="font-size:10px; color:var(--text-muted); padding-left:15px; margin-bottom:12px; display:flex; flex-direction:column; gap:4px;">
+                    <div style="display:flex; justify-content:space-between;"><span>📁 Envelopes:</span> <strong id="diagEnv" style="color:var(--text);">-0.00</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span>💨 Vapes:</span> <strong id="diagVape" style="color:var(--text);">-0.00</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span>🏆 Buffers:</span> <strong id="diagBuf" style="color:var(--text);">-0.00</strong></div>
                 </div>
+
                 <div style="display:flex; justify-content:space-between; font-size:14px; border-top:1px dashed var(--panel-border); padding-top:10px; color:var(--success); font-weight:bold;">
                     <span>💎 Core Capital:</span> 
                     <span id="diagCore">0.00</span>
@@ -2953,22 +2956,40 @@ function setPaycheckWizardType(type) {
         
         let earmarkedTND = envTND + vapeTND + bufTND;
 
-        // --- 4. Calculate Gross Assets & Core Capital ---
-        let grossTND = (parseFloat(s.vault.cash_tnd) || 0) + 
-                       (parseFloat(s.vault.savings) || 0) + 
-                       (((parseFloat(s.vault.cash_usd) || 0) + 
-                         (parseFloat(s.vault.brightwell) || 0) + 
-                         (parseFloat(s.vault.wise) || 0)) * fx);
-        
-        let coreTND = grossTND - earmarkedTND;
-        
-        let grossDisp = isTND ? grossTND : grossTND / fx;
-        let earmarkDisp = isTND ? earmarkedTND : earmarkedTND / fx;
-        let coreDisp = isTND ? coreTND : coreTND / fx;
+        // --- 4. Calculate Gross Assets & Core Capital (FIREWALLED) ---
+        let envDisp = isTND ? envTND : envTND / fx;
+        let vapeDisp = isTND ? vapeTND : vapeTND / fx;
+        let bufDisp = isTND ? bufTND : bufTND / fx;
+        let totalEarmarkDisp = envDisp + vapeDisp + bufDisp;
+
+        document.getElementById('diagEnv').innerText = "-" + envDisp.toFixed(2) + sym;
+        document.getElementById('diagVape').innerText = "-" + vapeDisp.toFixed(2) + sym;
+        document.getElementById('diagBuf').innerText = "-" + bufDisp.toFixed(2) + sym;
+        document.getElementById('diagEarmarked').innerText = "-" + totalEarmarkDisp.toFixed(2) + sym;
+
+        let grossDisp = 0;
+        let coreDisp = 0;
+
+        if (isTND) {
+            let grossTND = (parseFloat(s.vault.cash_tnd) || 0) + 
+                           (parseFloat(s.vault.savings) || 0) + 
+                           (((parseFloat(s.vault.cash_usd) || 0) + 
+                             (parseFloat(s.vault.brightwell) || 0) + 
+                             (parseFloat(s.vault.wise) || 0)) * fx);
+            grossDisp = grossTND;
+            coreDisp = grossTND - earmarkedTND;
+        } else {
+            // ONBOARD MODE FIREWALL: Only USD Liquidity
+            let grossUSD = (parseFloat(s.vault.cash_usd) || 0) + 
+                           (parseFloat(s.vault.brightwell) || 0) + 
+                           (parseFloat(s.vault.wise) || 0);
+            grossDisp = grossUSD;
+            coreDisp = grossUSD - totalEarmarkDisp; // Subtract ALL global liabilities (USD + TND) from USD pool
+        }
         
         document.getElementById('diagGross').innerText = grossDisp.toFixed(2) + sym;
-        document.getElementById('diagEarmarked').innerText = "-" + earmarkDisp.toFixed(2) + sym;
         document.getElementById('diagCore').innerText = coreDisp.toFixed(2) + sym;
+
         
         // --- 5. Core Forecasts ---
         let trueBurn = calculateTrueBurn(); 
@@ -3204,11 +3225,18 @@ function setPaycheckWizardType(type) {
                 uiRnw = totT / limit;
                 uiNet = (totT - activeEnvTND - vapeTND - lockedBufTND) / limit;
             } else {
-                let limitTND = limit * fx;
-                uiRnw = totT / limitTND;
-                uiNet = (totT - activeEnvTND - vapeTND - lockedBufTND) / limitTND;
+                // ONBOARD MODE FIREWALL: Only USD Liquidity vs ALL Liabilities
+                let liqUSD = (parseFloat(s.vault.cash_usd) || 0) + 
+                             (parseFloat(s.vault.brightwell) || 0) + 
+                             (parseFloat(s.vault.wise) || 0);
+                
+                let totalEarmarksUSD = (activeEnvTND + vapeTND + lockedBufTND) / fx;
+                
+                uiRnw = liqUSD / limit;
+                uiNet = (liqUSD - totalEarmarksUSD) / limit;
             }
         }
+
         
         document.getElementById('uiRunway').innerText = uiRnw.toFixed(1) + " Days";
         document.getElementById('uiRunwayBudget').innerText = `(@ ${limit.toFixed(2)}${sym}/day)`;
