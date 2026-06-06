@@ -653,12 +653,12 @@
             </div>
 
             <!-- SCOREBOARD -->
-            <div class="scoreboard-row">
-                <div class="score-box green-box" onclick="openBehaviorModal()">
+                        <div class="scoreboard-row">
+                <div class="score-box green-box" onclick="openSafeDaysModal()">
                     <div class="title">🟢 Safe Days</div>
                     <div class="score-num" id="safeDaysCount">0</div>
                 </div>
-                <div class="score-box red-box" onclick="openBehaviorModal()">
+                <div class="score-box red-box" onclick="openOverDaysModal()">
                     <div class="title">🔴 Over Days</div>
                     <div class="score-num" id="overDaysCount">0</div>
                 </div>
@@ -671,6 +671,7 @@
                     <div class="score-num" id="maxStreakCount" style="color:#38bdf8;">0</div>
                 </div>
             </div>
+
 
             <!-- TODAY'S BALANCE -->
             <div class="balance-card">
@@ -1574,6 +1575,52 @@
         </div>
     </div>
 
+
+        <div class="modal-overlay" id="overDaysModal">
+        <div class="modal-content">
+            <div class="title" style="text-align:center; font-size:12px; color:var(--danger);">🔴 Over Days Analysis</div>
+            
+            <div style="display:flex; justify-content:space-between; gap:10px; margin-top:15px; margin-bottom:10px;">
+                <div class="b-stat" style="flex:1; margin-bottom:0; text-align:center; border-color:rgba(248, 113, 113, 0.3);">
+                    <div style="font-size:10px; color:var(--text-muted);">Avg Overage Spend</div>
+                    <div id="odAvgSpend" style="color:var(--text); font-size:14px; font-weight:bold;">0.00</div>
+                </div>
+                <div class="b-stat" style="flex:1; margin-bottom:0; text-align:center; border-color:rgba(248, 113, 113, 0.3);">
+                    <div style="font-size:10px; color:var(--text-muted);">Avg Bleed Over Limit</div>
+                    <div id="odAvgOverage" style="color:var(--danger); font-size:14px; font-weight:bold;">0.00</div>
+                </div>
+            </div>
+            
+            <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">History Log (Newest First)</div>
+            <div id="odList" class="scrollable-list" style="max-height:250px; display:flex; flex-direction:column; gap:8px;"></div>
+            
+            <button class="btn-secondary" style="margin-top:15px;" onclick="document.getElementById('overDaysModal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="safeDaysModal">
+        <div class="modal-content">
+            <div class="title" style="text-align:center; font-size:12px; color:var(--success);">🟢 Safe Days Analysis</div>
+            
+            <div style="display:flex; justify-content:space-between; gap:10px; margin-top:15px; margin-bottom:10px;">
+                <div class="b-stat" style="flex:1; margin-bottom:0; text-align:center; border-color:rgba(74, 222, 128, 0.3);">
+                    <div style="font-size:10px; color:var(--text-muted);">Total Safe Days</div>
+                    <div id="sdTotalDays" style="color:var(--text); font-size:14px; font-weight:bold;">0</div>
+                </div>
+                <div class="b-stat" style="flex:1; margin-bottom:0; text-align:center; border-color:rgba(74, 222, 128, 0.3);">
+                    <div style="font-size:10px; color:var(--text-muted);">Avg Safe Spend</div>
+                    <div id="sdAvgSpend" style="color:var(--success); font-size:14px; font-weight:bold;">0.00</div>
+                </div>
+            </div>
+            
+            <div style="font-size:10px; color:var(--success); font-weight:bold; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px; border-bottom:1px dashed var(--panel-border); padding-bottom:4px;">🏆 Top 3 Least Spent Days</div>
+            <div id="sdTop3List" style="display:flex; flex-direction:column; gap:8px;"></div>
+            
+            <button class="btn-secondary" style="margin-top:15px;" onclick="document.getElementById('safeDaysModal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    
     <div class="modal-overlay" id="behaviorModal">
         <div class="modal-content">
             <div class="title" style="text-align:center; font-size:12px; color:white;">Behavioral Insights</div>
@@ -2837,6 +2884,122 @@ function setPaycheckWizardType(type) {
         }
     }
 
+    function openOverDaysModal() {
+        let overDaysList = [];
+        let totalOverSpend = 0;
+        let totalOverage = 0;
+        
+        let combined = [
+            ...(s.history.vacation.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'vacation' })), 
+            ...(s.history.onboard.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'onboard' }))
+        ];
+
+        combined.forEach(day => {
+            let activeLimit = parseFloat(day.l) || parseFloat(s.history[day.m].limit) || 0;
+            let spent = (day.logs || []).reduce((sum, item) => {
+                let amt = parseFloat(item.amount) || 0;
+                let spl = parseFloat(item.spillover) || 0;
+                if (item.category === "🏦 Financial & Fees") return sum;
+                return sum + (item.bypassLimit ? spl : amt);
+            }, 0);
+
+            if (spent > activeLimit) {
+                let overage = spent - activeLimit;
+                totalOverSpend += spent;
+                totalOverage += overage;
+                overDaysList.push({ date: day.d, limit: activeLimit, spent: spent, overage: overage, mode: day.m });
+            }
+        });
+
+        // Sort by Newest First
+        overDaysList.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        let avgSpend = overDaysList.length > 0 ? (totalOverSpend / overDaysList.length) : 0;
+        let avgOverage = overDaysList.length > 0 ? (totalOverage / overDaysList.length) : 0;
+
+        document.getElementById('odAvgSpend').innerText = avgSpend.toFixed(2);
+        document.getElementById('odAvgOverage').innerText = avgOverage.toFixed(2);
+
+        let html = '';
+        overDaysList.forEach(item => {
+            let sym = item.mode === 'vacation' ? 'TND' : 'USD';
+            html += `<div class="iou-item" style="padding:8px; border-color:rgba(248, 113, 113, 0.4); flex-direction:column; align-items:flex-start; gap:4px; margin-bottom:0;">
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                            <strong style="color:var(--text); font-size:11px;">${item.date}</strong>
+                            <strong style="color:var(--danger); font-size:11px;">+${item.overage.toFixed(2)} ${sym} Over</strong>
+                        </div>
+                        <div style="font-size:9px; color:var(--text-muted); width:100%; display:flex; justify-content:space-between;">
+                            <span>Spent: ${item.spent.toFixed(2)}</span>
+                            <span>Limit: ${item.limit.toFixed(2)}</span>
+                        </div>
+                    </div>`;
+        });
+        
+        document.getElementById('odList').innerHTML = html || '<div style="text-align:center; font-size:11px; color:var(--text-muted); padding:10px;">No over days recorded. Flawless execution!</div>';
+        document.getElementById('overDaysModal').style.display = 'flex';
+    }
+
+    function openSafeDaysModal() {
+        let safeDaysList = [];
+        let totalSafeSpend = 0;
+        
+        let combined = [
+            ...(s.history.vacation.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'vacation' })), 
+            ...(s.history.onboard.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'onboard' }))
+        ];
+
+        combined.forEach(day => {
+            let activeLimit = parseFloat(day.l) || parseFloat(s.history[day.m].limit) || 0;
+            let spent = 0;
+            let cats = {};
+            (day.logs || []).forEach(item => {
+                let amt = parseFloat(item.amount) || 0;
+                let spl = parseFloat(item.spillover) || 0;
+                if (item.category === "🏦 Financial & Fees") return;
+                let effAmt = (item.bypassLimit ? spl : amt);
+                spent += effAmt;
+                if (effAmt > 0) {
+                    let catName = item.category || 'Uncategorized';
+                    cats[catName] = (cats[catName] || 0) + effAmt;
+                }
+            });
+
+            if (spent <= activeLimit) {
+                totalSafeSpend += spent;
+                safeDaysList.push({ date: day.d, limit: activeLimit, spent: spent, cats: cats, mode: day.m });
+            }
+        });
+
+        let avgSpend = safeDaysList.length > 0 ? (totalSafeSpend / safeDaysList.length) : 0;
+        document.getElementById('sdAvgSpend').innerText = avgSpend.toFixed(2);
+        document.getElementById('sdTotalDays').innerText = safeDaysList.length;
+
+        // Sort by Least Spent
+        safeDaysList.sort((a, b) => a.spent - b.spent);
+        let top3 = safeDaysList.slice(0, 3);
+
+        let html = '';
+        top3.forEach((item, index) => {
+            let sym = item.mode === 'vacation' ? 'TND' : 'USD';
+            
+            let catArr = Object.keys(item.cats).map(k => `<span style="color:var(--text);">${k}:</span> ${item.cats[k].toFixed(2)}`);
+            let catHtml = catArr.join(' <span style="color:var(--panel-border);">|</span> ');
+            if (catArr.length === 0) catHtml = '✨ Zero Spend Day! No categories logged.';
+            
+            html += `<div class="iou-item" style="padding:8px; border-color:rgba(74, 222, 128, 0.4); flex-direction:column; align-items:flex-start; gap:6px; margin-bottom:0;">
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                            <span><strong style="color:var(--success); margin-right:6px;">#${index+1}</strong> <span style="color:var(--text); font-size:11px; font-weight:bold;">${item.date}</span></span>
+                            <strong style="color:var(--success); font-size:12px;">${item.spent.toFixed(2)} ${sym}</strong>
+                        </div>
+                        <div style="font-size:9px; color:var(--text-muted); width:100%; border-top:1px dashed var(--panel-border); padding-top:6px; line-height:1.4;">
+                            ${catHtml}
+                        </div>
+                    </div>`;
+        });
+        
+        document.getElementById('sdTop3List').innerHTML = html || '<div style="text-align:center; font-size:11px; color:var(--text-muted); padding:10px;">Not enough data. Keep logging!</div>';
+        document.getElementById('safeDaysModal').style.display = 'flex';
+    }
 
     function checkVapeField(prefix) {
         let cat = document.getElementById(prefix + 'Category').value;
