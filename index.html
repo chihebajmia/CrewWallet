@@ -1654,22 +1654,36 @@
             </div>
         </div>
     </div>
-        <div class="modal-overlay" id="editVapeModal">
+            <div class="modal-overlay" id="editVapeModal">
         <div class="modal-content">
             <div class="title" style="text-align:center; font-size:12px; color:#a855f7;">✏️ Edit Vape Asset</div>
             <input type="hidden" id="evId">
             <input type="text" id="evBrand" placeholder="Brand (e.g., Elfbar)" style="margin-top:15px; width:100%;">
             <input type="text" id="evFlavor" placeholder="Flavor (e.g., Mint)" style="margin-top:10px; width:100%;">
+            
             <div style="display:flex; gap:10px; margin-top:10px;">
                 <input type="number" id="evPuffs" placeholder="Puffs" style="flex:1;" inputmode="numeric">
                 <input type="number" id="evML" placeholder="Volume ML" style="flex:1;" inputmode="decimal">
             </div>
+
+            <div style="display:flex; gap:10px; margin-top:10px; background:var(--vault-bg); padding:10px; border-radius:8px; border:1px solid var(--panel-border);">
+                <div style="flex:1;">
+                    <label style="font-size:9px; color:var(--text-muted); font-weight:bold;">DATE OPENED</label>
+                    <input type="date" id="evOpened" style="width:100%; color-scheme:dark; border-color:#a855f7; margin-top:4px;">
+                </div>
+                <div style="flex:1;">
+                    <label style="font-size:9px; color:var(--text-muted); font-weight:bold;">DATE KILLED</label>
+                    <input type="date" id="evKilled" style="width:100%; color-scheme:dark; border-color:var(--danger); margin-top:4px;">
+                </div>
+            </div>
+
             <div class="modal-btn-row">
                 <button class="btn-secondary" onclick="document.getElementById('editVapeModal').style.display='none'">Cancel</button>
                 <button class="v-btn" style="background:#a855f7; color:#fff;" onclick="saveVapeEdit()">Save Details</button>
             </div>
         </div>
     </div>
+
 
     <!-- V38 IOU ENGINE MODALS -->
     <div class="modal-overlay" id="iouModal">
@@ -4100,6 +4114,17 @@ if(document.getElementById('advVapeBrand')) {
         document.getElementById('evFlavor').value = v.flavor === 'Needs Details' ? '' : v.flavor;
         document.getElementById('evPuffs').value = v.puffs || '';
         document.getElementById('evML').value = v.ml || '';
+        
+        // Convert timestamp to YYYY-MM-DD for the HTML input
+        let formatTs = (ts) => {
+            if (!ts) return '';
+            let d = new Date(ts);
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        };
+
+        document.getElementById('evOpened').value = formatTs(v.opened_ts);
+        document.getElementById('evKilled').value = formatTs(v.killed_ts);
+
         document.getElementById('editVapeModal').style.display = 'flex';
     }
     
@@ -4113,10 +4138,33 @@ if(document.getElementById('advVapeBrand')) {
         v.puffs = document.getElementById('evPuffs').value || '';
         v.ml = document.getElementById('evML').value || '';
         
+        let oDate = document.getElementById('evOpened').value;
+        let kDate = document.getElementById('evKilled').value;
+
+        // Force noon time to prevent UTC timezone drift shifting the date backward by 1 day
+        if (oDate) {
+            v.opened_ts = new Date(oDate + 'T12:00:00').getTime();
+            if (v.status === 'sealed') v.status = 'active'; // Auto-activate if opened
+        } else {
+            v.opened_ts = null;
+        }
+
+        if (kDate) {
+            v.killed_ts = new Date(kDate + 'T12:00:00').getTime();
+            v.status = 'dead'; // Auto-kill if killed date exists
+        } else {
+            v.killed_ts = null;
+            if (v.status === 'dead') v.status = v.opened_ts ? 'active' : 'sealed'; // Auto-resurrect
+        }
+
+        // Failsafe: Sync the live stash count
+        s.vape_stash.count = s.vape_stash.inventory.filter(x => x.status !== 'dead').length;
+        
         saveState();
         document.getElementById('editVapeModal').style.display = 'none';
         if (document.getElementById('tab-analytics').classList.contains('active')) renderVapeStats();
     }
+
     
     function openSealedVape(id) {
         let v = s.vape_stash.inventory.find(x => x.id === id);
