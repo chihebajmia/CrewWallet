@@ -1447,37 +1447,74 @@
     </div>
 
 
-    <div class="modal-overlay" id="ibkrModal">
-        <div class="modal-content">
-            <div class="title" style="text-align:center; font-size:12px; color:#38bdf8;">📈 IBKR Portfolio Command</div>
-            
-            <div style="display:flex; justify-content:space-between; background:var(--vault-bg); padding:10px; border-radius:8px; border:1px solid var(--panel-border); margin-top:10px;">
-                <div style="text-align:center; flex:1;">
-                    <div style="font-size:9px; color:var(--text-muted);">Idle Cash</div>
-                    <input type="number" id="ibkrIdle" inputmode="decimal" style="font-size:14px; font-weight:bold; text-align:center; padding:4px; margin-top:4px;" oninput="saveIBKR()">
+        <div class="modal-overlay" id="ibkrModal">
+        <div class="modal-content" style="max-width:350px;">
+            <div class="title" style="text-align:center; font-size:14px; color:#38bdf8; margin-bottom:15px;">📈 Interactive Brokers (CSPX)</div>
+
+            <div style="background:var(--vault-bg); padding:12px; border-radius:8px; border:1px solid var(--panel-border); margin-bottom:15px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="font-size:11px; color:var(--text-muted);">Idle Cash:</span>
+                    <strong id="ibkrIdleCashDisplay" style="color:var(--success);">$0.00</strong>
                 </div>
-                <div style="text-align:center; flex:1; border-left:1px solid var(--panel-border); margin-left:10px; padding-left:10px;">
-                    <div style="font-size:9px; color:var(--text-muted);">Total Shares</div>
-                    <input type="number" id="ibkrShares" inputmode="decimal" style="font-size:14px; font-weight:bold; text-align:center; padding:4px; margin-top:4px;" oninput="saveIBKR()">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="font-size:11px; color:var(--text-muted);">Total Shares:</span>
+                    <strong id="ibkrSharesDisplay" style="color:var(--text);">0.0000</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="font-size:11px; color:var(--text-muted);">Avg Cost Basis:</span>
+                    <strong id="ibkrCostDisplay" style="color:var(--text);">$0.00</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; border-top:1px dashed var(--panel-border); padding-top:8px;">
+                    <span style="font-size:11px; color:var(--text-muted);">Market Value:</span>
+                    <strong id="ibkrValueDisplay" style="color:#38bdf8;">$0.00</strong>
                 </div>
             </div>
-            
-            <div class="modal-input-group" style="margin-top:15px;">
-                <label>Cost Basis (Total Cash Deployed)</label>
-                <input type="number" id="ibkrCost" inputmode="decimal" oninput="saveIBKR()">
+
+            <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">1. Transit Pipeline</div>
+            <div style="background:rgba(251, 191, 36, 0.05); padding:10px; border-radius:8px; border:1px solid rgba(251, 191, 36, 0.2); margin-bottom:15px; display:flex; flex-direction:column; gap:10px;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; flex-direction:column;">
+                        <span style="font-size:11px; color:var(--text);">Brightwell ➔ Wise</span>
+                        <span style="font-size:9px; color:var(--warning);">In Transit: <strong id="transitWiseDisplay">$0.00</strong></span>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="v-btn" style="padding:4px 8px; font-size:10px; background:var(--vault-bg); border:1px solid var(--panel-border);" onclick="initiateTransit('brightwell_wise')">Send</button>
+                        <button class="v-btn" style="padding:4px 8px; font-size:10px; background:var(--success); color:#000;" onclick="clearTransit('brightwell_wise')">Clear</button>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed rgba(251, 191, 36, 0.2); padding-top:10px;">
+                    <div style="display:flex; flex-direction:column;">
+                        <span style="font-size:11px; color:var(--text);">Wise ➔ IBKR</span>
+                        <span style="font-size:9px; color:var(--warning);">In Transit: <strong id="transitIbkrDisplay">$0.00</strong></span>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="v-btn" style="padding:4px 8px; font-size:10px; background:var(--vault-bg); border:1px solid var(--panel-border);" onclick="initiateTransit('wise_ibkr')">Send</button>
+                        <button class="v-btn" style="padding:4px 8px; font-size:10px; background:var(--success); color:#000;" onclick="clearTransit('wise_ibkr')">Clear</button>
+                    </div>
+                </div>
             </div>
-            
-            <div class="modal-input-group" style="margin-top:10px;">
-                <label style="color:#38bdf8; display:flex; justify-content:space-between;">
-                    Live Market Price (Per Share) 
-                    <button onclick="fetchStockPrice()" style="background:none; border:none; color:var(--accent); font-size:10px; cursor:pointer; padding:0;">Auto-Fetch 🔄</button>
-                </label>
-                <input type="number" id="ibkrPrice" inputmode="decimal" oninput="saveIBKR()">
+
+            <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">2. Execute Trade</div>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:15px;">
+                <div style="display:flex; gap:8px;">
+                    <input type="number" id="tradeShares" placeholder="Shares (e.g. 0.5)" style="flex:1;" inputmode="decimal">
+                    <input type="number" id="tradePrice" placeholder="Price ($)" style="flex:1;" inputmode="decimal">
+                </div>
+                <input type="number" id="tradeFee" placeholder="Broker Fee ($)" style="width:100%;" inputmode="decimal">
+                <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="executeIBKRTrade()">⚡ Execute Purchase</button>
             </div>
-            
-            <button class="btn-secondary" style="margin-top:20px;" onclick="document.getElementById('ibkrModal').style.display='none'">Close & Update Dashboard</button>
+
+            <div class="modal-btn-row">
+                <button class="btn-secondary" onclick="autoFetchCSPX()" style="flex:1; padding:8px 4px; font-size:10px;">🔄 Auto-Fetch Price</button>
+                <button class="btn-secondary" onclick="calibrateIBKR()" style="flex:1; padding:8px 4px; font-size:10px; color:var(--warning); border-color:rgba(251, 191, 36, 0.4);">🛠️ Sync Reality</button>
+                <button class="btn-secondary" onclick="document.getElementById('ibkrModal').style.display='none'; renderDashboard();" style="flex:1; padding:8px 4px; font-size:10px;">Close</button>
+            </div>
+
         </div>
     </div>
+
 
     <div class="modal-overlay" id="sweepModal">
         <div class="modal-content">
@@ -6180,37 +6217,177 @@ async function deleteIncome(index) {
     // 15. IBKR INVESTMENTS & VAULT OVERRIDES
     // ==========================================
     function openIBKRModal() {
-        document.getElementById('ibkrIdle').value = (parseFloat(s.vault.ibkr_cash) || 0).toFixed(2); 
-        document.getElementById('ibkrShares').value = parseFloat(s.vault.ibkr_shares) || 0;
-        document.getElementById('ibkrCost').value = (parseFloat(s.vault.ibkr_cost) || 0).toFixed(2); 
-        document.getElementById('ibkrPrice').value = (parseFloat(s.vault.ibkr_price) || 0).toFixed(2);
+        document.getElementById('ibkrIdleCashDisplay').innerText = "$" + (parseFloat(s.vault.ibkr_cash) || 0).toFixed(2);
+        document.getElementById('ibkrSharesDisplay').innerText = (parseFloat(s.vault.ibkr_shares) || 0).toFixed(4);
+        document.getElementById('ibkrCostDisplay').innerText = "$" + (parseFloat(s.vault.ibkr_cost) || 0).toFixed(2);
         
+        let shares = parseFloat(s.vault.ibkr_shares) || 0;
+        let price = parseFloat(s.vault.ibkr_price) || 0;
+        document.getElementById('ibkrValueDisplay').innerText = "$" + (shares * price).toFixed(2);
+
+        document.getElementById('transitWiseDisplay').innerText = "$" + (parseFloat(s.vault.transit_wise) || 0).toFixed(2);
+        document.getElementById('transitIbkrDisplay').innerText = "$" + (parseFloat(s.vault.transit_ibkr) || 0).toFixed(2);
+
+        document.getElementById('tradeShares').value = '';
+        document.getElementById('tradePrice').value = '';
+        document.getElementById('tradeFee').value = '';
+
         document.getElementById('ibkrModal').style.display = 'flex';
     }
 
-    function saveIBKR() {
-        s.vault.ibkr_cash = parseFloat(document.getElementById('ibkrIdle').value) || 0; 
-        s.vault.ibkr_shares = parseFloat(document.getElementById('ibkrShares').value) || 0;
-        s.vault.ibkr_cost = parseFloat(document.getElementById('ibkrCost').value) || 0; 
-        s.vault.ibkr_price = parseFloat(document.getElementById('ibkrPrice').value) || 0;
+    async function calibrateIBKR() {
+        let c = await openUConfirm("Sync Reality", "This will override your IBKR data with real-world numbers. Proceed?");
+        if (!c) return;
+
+        let sharesStr = await openUPrompt("Step 1/4", "Enter exact TOTAL SHARES owned (e.g., 1.5234):");
+        if(sharesStr === null) return;
         
-        s.vault.ibkr = s.vault.ibkr_cash + (s.vault.ibkr_shares * s.vault.ibkr_price);
+        let costStr = await openUPrompt("Step 2/4", "Enter TOTAL COST BASIS (The exact amount of USD spent to acquire those shares):");
+        if(costStr === null) return;
+
+        let idleStr = await openUPrompt("Step 3/4", "Enter IDLE CASH (Uninvested pennies sitting in IBKR):");
+        if(idleStr === null) return;
+
+        let feesStr = await openUPrompt("Step 4/4", "Enter TOTAL HISTORICAL FEES paid to date (e.g., all past $1.13 Wise fees combined):");
+        if(feesStr === null) return;
+
+        s.vault.ibkr_shares = parseFloat(sharesStr) || 0;
+        s.vault.ibkr_cost = parseFloat(costStr) || 0;
+        s.vault.ibkr_cash = parseFloat(idleStr) || 0;
+        
+        // Ensure lifetime fees are counted to keep global math perfectly accurate
+        s.vault.lifetime_fees = parseFloat(feesStr) || 0;
+        
+        // Nullify any transit amounts (since we are ignoring the mistake deposit)
+        s.vault.transit_wise = 0;
+        s.vault.transit_ibkr = 0;
+
+        s.vault.ibkr = s.vault.ibkr_cash + (s.vault.ibkr_shares * (parseFloat(s.vault.ibkr_price) || 0));
+
         saveState();
+        openIBKRModal();
+        alert("✅ Reality Synced Successfully.");
     }
 
-    async function fetchStockPrice() {
-        document.getElementById('ibkrPrice').value = '...';
-        try { 
-            let res = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/CSPX.AS"); 
-            let data = await res.json(); 
-            let p = data.chart.result[0].meta.regularMarketPrice; 
-            document.getElementById('ibkrPrice').value = p; 
-            saveIBKR(); 
-        } catch(e) { 
-            document.getElementById('ibkrPrice').value = parseFloat(s.vault.ibkr_price) || 0; 
-            alert("Failed to fetch live price."); 
+    async function initiateTransit(route) {
+        if (route === 'brightwell_wise') {
+            let amtStr = await openUPrompt("Brightwell ➔ Wise", "Enter AMOUNT TO SEND (The $1 fee will be handled automatically):");
+            if (!amtStr) return;
+            let amt = parseFloat(amtStr);
+            if (isNaN(amt) || amt <= 0) return alert("Invalid amount.");
+            
+            let totalDeduct = amt + 1.00;
+            if ((parseFloat(s.vault.brightwell) || 0) < totalDeduct) return alert("Insufficient Brightwell funds (including $1 fee).");
+
+            s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) - totalDeduct;
+            s.vault.transit_wise = (parseFloat(s.vault.transit_wise) || 0) + amt;
+            s.vault.lifetime_fees = (parseFloat(s.vault.lifetime_fees) || 0) + 1.00;
+
+            saveState();
+            openIBKRModal();
+        } 
+        else if (route === 'wise_ibkr') {
+            let amtStr = await openUPrompt("Wise ➔ IBKR", "Enter AMOUNT TO SEND (The $1.13 fee will be handled automatically):");
+            if (!amtStr) return;
+            let amt = parseFloat(amtStr);
+            if (isNaN(amt) || amt <= 0) return alert("Invalid amount.");
+            
+            let totalDeduct = amt + 1.13;
+            if ((parseFloat(s.vault.wise) || 0) < totalDeduct) return alert("Insufficient Wise funds (including $1.13 fee).");
+
+            s.vault.wise = (parseFloat(s.vault.wise) || 0) - totalDeduct;
+            s.vault.transit_ibkr = (parseFloat(s.vault.transit_ibkr) || 0) + amt;
+            s.vault.lifetime_fees = (parseFloat(s.vault.lifetime_fees) || 0) + 1.13;
+
+            saveState();
+            openIBKRModal();
         }
     }
+
+    async function clearTransit(route) {
+        if (route === 'brightwell_wise') {
+            let pending = parseFloat(s.vault.transit_wise) || 0;
+            if (pending <= 0) return alert("No funds in transit.");
+            let c = await openUConfirm("Clear Transit", `Has $${pending.toFixed(2)} officially landed in Wise?`);
+            if (!c) return;
+
+            s.vault.wise = (parseFloat(s.vault.wise) || 0) + pending;
+            s.vault.transit_wise = 0;
+            saveState();
+            openIBKRModal();
+        }
+        else if (route === 'wise_ibkr') {
+            let pending = parseFloat(s.vault.transit_ibkr) || 0;
+            if (pending <= 0) return alert("No funds in transit.");
+            let c = await openUConfirm("Clear Transit", `Has $${pending.toFixed(2)} officially landed in IBKR?`);
+            if (!c) return;
+
+            s.vault.ibkr_cash = (parseFloat(s.vault.ibkr_cash) || 0) + pending;
+            s.vault.transit_ibkr = 0;
+            saveState();
+            openIBKRModal();
+        }
+    }
+
+    async function executeIBKRTrade() {
+        let shares = parseFloat(document.getElementById('tradeShares').value);
+        let price = parseFloat(document.getElementById('tradePrice').value);
+        let fee = parseFloat(document.getElementById('tradeFee').value) || 0;
+
+        if (isNaN(shares) || isNaN(price) || shares <= 0 || price <= 0) return alert("Valid shares and price required.");
+
+        let totalCost = (shares * price);
+        let totalDeduct = totalCost + fee;
+
+        if ((parseFloat(s.vault.ibkr_cash) || 0) < totalDeduct) return alert("Insufficient Idle Cash in IBKR.");
+
+        s.vault.ibkr_cash = (parseFloat(s.vault.ibkr_cash) || 0) - totalDeduct;
+        s.vault.ibkr_shares = (parseFloat(s.vault.ibkr_shares) || 0) + shares;
+        s.vault.ibkr_cost = (parseFloat(s.vault.ibkr_cost) || 0) + totalCost;
+        
+        s.vault.ibkr_fees = (parseFloat(s.vault.ibkr_fees) || 0) + fee;
+        s.vault.lifetime_fees = (parseFloat(s.vault.lifetime_fees) || 0) + fee;
+        s.vault.ibkr_price = price; 
+        s.vault.ibkr = s.vault.ibkr_cash + (s.vault.ibkr_shares * s.vault.ibkr_price);
+
+        saveState();
+        openIBKRModal();
+    }
+
+    async function autoFetchCSPX() {
+        document.getElementById('ibkrValueDisplay').innerText = "Fetching...";
+        try {
+            // Using a secure CORS proxy to bypass Safari's security blocks
+            let res = await fetch("https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/CSPX.AS");
+            let data = await res.json();
+            let livePrice = data.chart.result[0].meta.regularMarketPrice;
+            
+            if (livePrice && !isNaN(livePrice)) {
+                s.vault.ibkr_price = livePrice;
+                s.vault.ibkr = (parseFloat(s.vault.ibkr_cash) || 0) + ((parseFloat(s.vault.ibkr_shares) || 0) * livePrice);
+                saveState();
+                openIBKRModal();
+                alert(`✅ CSPX Live Price updated to $${livePrice.toFixed(2)}`);
+            } else {
+                throw new Error("Invalid price data");
+            }
+        } catch(e) {
+            openIBKRModal();
+            // Fallback to manual entry if the proxy is temporarily down
+            let val = await openUPrompt("Fetch Failed", "Could not reach server. Enter current price manually:", (parseFloat(s.vault.ibkr_price) || 0).toFixed(2));
+            if (val !== null) {
+                let p = parseFloat(val);
+                if (!isNaN(p) && p > 0) {
+                    s.vault.ibkr_price = p;
+                    s.vault.ibkr = (parseFloat(s.vault.ibkr_cash) || 0) + ((parseFloat(s.vault.ibkr_shares) || 0) * p);
+                    saveState();
+                    openIBKRModal();
+                }
+            }
+        }
+    }
+
+
 
     function openSweepModal() { 
         document.getElementById('swAmount').value = ''; 
