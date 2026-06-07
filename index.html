@@ -3150,18 +3150,9 @@ function setPaycheckWizardType(type) {
         });
 
         let currentStash = parseInt(s.vape_stash.count) || 0;
-        let consumedDevices = estDevices - currentStash;
-        if (consumedDevices <= 0) consumedDevices = 0.5; // Prevent division by zero
-
-        let trueVapeBurnRate = 4; // Default fallback
-        if (purchaseDates.length > 0) {
-            purchaseDates.sort((a, b) => a.getTime() - b.getTime());
-            let firstDate = purchaseDates[0];
-            let totalDaysSmoking = Math.max(1, (Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
-            trueVapeBurnRate = totalDaysSmoking / consumedDevices;
-        }
-
+        let trueVapeBurnRate = getDynamicVapeBurnRate();
         let projectedVapesNeeded = daysLeft / trueVapeBurnRate;
+
         let vapesToBuy = Math.max(0, projectedVapesNeeded - currentStash);
         let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (isTND ? 35 : 10);
         
@@ -4478,7 +4469,55 @@ if(document.getElementById('advVapeBrand')) {
     }
 
 
-            function renderVapeStats() {
+        function getDynamicVapeBurnRate() {
+        let inv = s.vape_stash.inventory || [];
+        let dead = inv.filter(v => v.status === "dead");
+
+        // 1. Primary Engine: The Graveyard (Most accurate)
+        if (dead.length > 0) {
+            let totalLifespans = 0;
+            let validDeadCount = 0;
+            dead.forEach(v => {
+                if (v.opened_ts && v.killed_ts) {
+                    totalLifespans += (v.killed_ts - v.opened_ts) / 86400000;
+                    validDeadCount++;
+                }
+            });
+            if (validDeadCount > 0) return totalLifespans / validDeadCount;
+        }
+
+        // 2. Secondary Engine: Purchase History (Fallback if Graveyard is empty)
+        let globalDevices = 0;
+        let purchaseDates = [];
+        ['vacation', 'onboard'].forEach(m => {
+            (s.history[m].archive || []).forEach(day => {
+                (day.logs || []).forEach(log => {
+                    if (log.category === '💨 Vape' || log.cat === 'vape') {
+                        globalDevices += (parseInt(log.vapeQty) || 1);
+                        purchaseDates.push(log.dateStr ? new Date(log.dateStr) : new Date(day.date));
+                    }
+                });
+            });
+            (s.history[m].current || []).forEach(log => {
+                if (log.category === '💨 Vape' || log.cat === 'vape') {
+                    globalDevices += (parseInt(log.vapeQty) || 1);
+                    purchaseDates.push(log.dateStr ? new Date(log.dateStr) : new Date());
+                }
+            });
+        });
+
+        if (purchaseDates.length > 0) {
+            purchaseDates.sort((a, b) => a.getTime() - b.getTime());
+            let currentStash = parseInt(s.vape_stash.count) || 0;
+            let consumedDevices = Math.max(0.5, globalDevices - currentStash);
+            let totalDaysSmoking = Math.max(1, (Date.now() - purchaseDates[0].getTime()) / 86400000);
+            return totalDaysSmoking / consumedDevices;
+        }
+
+        return 4.0; // Absolute zero-data failsafe
+    }
+
+    function renderVapeStats() {
         let purchaseDates = [];
         let modeVapeSpend = 0;
         let modeVapeDevices = 0;
@@ -4518,49 +4557,12 @@ if(document.getElementById('advVapeBrand')) {
         
         purchaseDates.sort((a, b) => a.getTime() - b.getTime());
 
-        /* 2. The Graveyard Burn Rate */
+                /* 2. Unified Dynamic Burn Rate */
         let inv = s.vape_stash.inventory || [];
-        let dead = inv.filter(v => v.status === "dead").sort((a,b) => b.killed_ts - a.killed_ts);
-        
-        let trueVapeBurnRate = 4;
-        
-        if (dead.length > 0) {
-            let totalLifespans = 0;
-            let validDeadCount = 0;
-            dead.forEach(v => {
-                if (v.opened_ts && v.killed_ts) {
-                    totalLifespans += (v.killed_ts - v.opened_ts) / 86400000;
-                    validDeadCount++;
-                }
-            });
-            if (validDeadCount > 0) {
-                trueVapeBurnRate = totalLifespans / validDeadCount;
-            }
-        } else if (purchaseDates.length > 0) {
-            /* Fallback: estimate from purchase dates */
-            let currentStash = parseInt(s.vape_stash.count) || 0;
-            let globalDevices = 0;
-            modeKeys.forEach(m => {
-                let arch = s.history[m].archive || [];
-                arch.forEach(day => { 
-                    let logs = day.logs || [];
-                    logs.forEach(log => { 
-                        let cat = log.category || "";
-                        if (cat.indexOf("Vape") !== -1 || log.cat === "vape") globalDevices += (parseInt(log.vapeQty) || 1); 
-                    }); 
-                });
-                let cur = s.history[m].current || [];
-                cur.forEach(log => { 
-                    let cat = log.category || "";
-                    if (cat.indexOf("Vape") !== -1 || log.cat === "vape") globalDevices += (parseInt(log.vapeQty) || 1); 
-                });
-            });
-            let consumedDevices = Math.max(0.5, globalDevices - currentStash);
-            let totalDaysSmoking = Math.max(1, (Date.now() - purchaseDates[0].getTime()) / 86400000);
-            trueVapeBurnRate = totalDaysSmoking / consumedDevices;
-        }
+        let trueVapeBurnRate = getDynamicVapeBurnRate();
 
         let daysSinceLast = 0;
+
         let lastDateStr = "N/A";
         if (purchaseDates.length > 0) {
             let lastDate = purchaseDates[purchaseDates.length - 1];
