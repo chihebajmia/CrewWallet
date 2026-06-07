@@ -6358,7 +6358,7 @@ async function deleteIncome(index) {
         document.getElementById('ibkrValueDisplay').innerText = "Fetching...";
         try {
             // Using a secure CORS proxy to bypass Safari's security blocks
-            let res = await fetch("https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/CSPX.AS");
+            let res = await fetch("https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/CSPX.L");
             let data = await res.json();
             let livePrice = data.chart.result[0].meta.regularMarketPrice;
             
