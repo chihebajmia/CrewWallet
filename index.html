@@ -12,10 +12,11 @@
     <title>Crew Wallet Master V38.2</title>
     
         <style>
-        /* BASE THEME & VARIABLES (Light Mode Default) */
+                /* BASE THEME & VARIABLES (Light Mode Default) */
         :root { 
-            --bg-color: #f1f5f9; 
-            --card-bg: #ffffff; 
+            --bg-color: #ffffff; /* Clean white app background */
+            --card-bg: #f1f5f9; /* Subtle light grey to define each widget */
+            --vault-bg: #ffffff; /* Inner boxes pop with white against the grey cards */
             --accent: #0ea5e9; 
             --text: #0f172a; 
             --text-muted: #64748b; 
@@ -23,10 +24,11 @@
             --warning: #f59e0b; 
             --danger: #ef4444; 
             --panel-border: #e2e8f0; 
-            --vault-bg: #f8fafc; 
-            --glass-border: rgba(0, 0, 0, 0.05);
+            --glass-border: rgba(0, 0, 0, 0.06);
             --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            --panel-bg: var(--vault-bg);
         }
+
 
         /* DARK MODE (Neo-Fintech Slate) */
         [data-theme="dark"] {
@@ -308,6 +310,15 @@
             color: var(--text) !important;
             border-color: var(--glass-border) !important;
         }
+
+        /* 7. FORCE NAVIGATOR TEXT TO OBEY THEME */
+        #navRecommendation {
+            color: var(--text) !important;
+        }
+        #navRecommendation span {
+            color: var(--text-muted) !important;
+        }
+
 
     </style>
 
