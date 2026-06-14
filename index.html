@@ -11,518 +11,218 @@
     <link rel="apple-touch-icon" href="icon.png">
     <title>Crew Wallet Master V38.2</title>
     
-    <style>
-        /* BASE THEME & VARIABLES */
+        <style>
+        /* BASE THEME & VARIABLES (Light Mode Default) */
         :root { 
-            --bg-color: #0f172a; 
-            --card-bg: #1e293b; 
-            --accent: #fbbf24; 
+            --bg-color: #f1f5f9; 
+            --card-bg: #ffffff; 
+            --accent: #0ea5e9; 
+            --text: #0f172a; 
+            --text-muted: #64748b; 
+            --success: #10b981; 
+            --warning: #f59e0b; 
+            --danger: #ef4444; 
+            --panel-border: #e2e8f0; 
+            --vault-bg: #f8fafc; 
+            --glass-border: rgba(0, 0, 0, 0.05);
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+        }
+
+        /* DARK MODE (Neo-Fintech Slate) */
+        [data-theme="dark"] {
+            --bg-color: #020617; 
+            --card-bg: #0f172a; 
+            --accent: #38bdf8; 
             --text: #f8fafc; 
             --text-muted: #94a3b8; 
-            --success: #4ade80; 
+            --success: #22c55e; 
             --warning: #facc15; 
             --danger: #f87171; 
-            --panel-border: #334155; 
-            --vault-bg: rgba(15, 23, 42, 0.5); 
+            --panel-border: #1e293b; 
+            --vault-bg: rgba(255, 255, 255, 0.03); 
+            --glass-border: rgba(255, 255, 255, 0.05);
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
         }
 
         /* CORE LAYOUT */
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-color); 
             color: var(--text); 
-            margin: 0; 
-            padding: 16px; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            min-height: 100vh; 
-            box-sizing: border-box; 
-            -webkit-tap-highlight-color: transparent; 
+            margin: 0; padding: 16px; 
+            display: flex; flex-direction: column; align-items: center; 
+            min-height: 100vh; box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent;
             padding-bottom: 90px; 
+            transition: background-color 0.4s ease, color 0.4s ease;
         }
-        
-        .app-container { 
-            width: 100%; 
-            max-width: 400px; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 14px; 
-        }
+        .app-container { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 16px; }
 
         /* NAVIGATION */
-        .page-section { 
-            display: none; 
-            flex-direction: column; 
-            gap: 14px; 
-        } 
-        .page-section.active { 
-            display: flex; 
-        }
+        .page-section { display: none; flex-direction: column; gap: 16px; } 
+        .page-section.active { display: flex; animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         .bottom-nav { 
-            position: fixed; 
-            bottom: 0; 
-            left: 0; 
-            width: 100%; 
-            background: var(--card-bg); 
-            border-top: 1px solid var(--panel-border); 
-            display: flex; 
-            justify-content: space-around; 
-            padding: 10px 0; 
-            padding-bottom: calc(10px + env(safe-area-inset-bottom)); 
+            position: fixed; bottom: 0; left: 0; width: 100%; 
+            background: rgba(var(--card-bg), 0.85);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid var(--glass-border); 
+            display: flex; justify-content: space-around; 
+            padding: 12px 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); 
             z-index: 50; 
         }
         .nav-btn { 
-            background: none; 
-            border: none; 
-            color: var(--text-muted); 
-            font-size: 10px; 
-            font-weight: bold; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            gap: 4px; 
-            cursor: pointer; 
-            flex: 1; 
-            transition: color 0.2s;
+            background: none; border: none; color: var(--text-muted); 
+            font-size: 10px; font-weight: 700; display: flex; flex-direction: column; 
+            align-items: center; gap: 4px; cursor: pointer; flex: 1; transition: all 0.2s;
         }
-        .nav-btn.active { 
-            color: var(--accent); 
-        } 
-        .nav-icon { 
-            font-size: 22px; 
-        }
+        .nav-btn.active { color: var(--accent); transform: scale(1.05); } 
+        .nav-icon { font-size: 24px; }
 
-        /* CARDS & VAULTS */
-        .vault-card { 
-            background-color: var(--card-bg); 
-            border-radius: 16px; 
-            padding: 16px; 
-            border: 1px solid var(--panel-border); 
+        /* PREMIUM CARDS */
+        .vault-card, .balance-card, .history-card, .form-panel { 
+            background-color: var(--card-bg);
+            border-radius: 20px; 
+            padding: 18px; 
+            border: 1px solid var(--glass-border); 
+            box-shadow: var(--shadow);
+            transition: background-color 0.4s ease, border-color 0.4s ease;
         }
-        .vault-card.clickable { 
-            cursor: pointer; 
-        }
-        .vault-card.clickable:active { 
-            border-color: var(--accent); 
-            background-color: #243147; 
+        .vault-card.clickable { cursor: pointer; }
+        .vault-card.clickable:active { transform: scale(0.98); }
+        
+        .vault-header, .title { 
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; 
+            color: var(--text-muted); margin-bottom: 12px; font-weight: 800;
+            display: flex; justify-content: space-between; align-items: center;
         }
         
-        .vault-header { 
-            font-size: 10px; 
-            text-transform: uppercase; 
-            letter-spacing: 1.5px; 
-            color: var(--text-muted); 
-            margin-bottom: 12px; 
-            text-align: center; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
+        .vault-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .vault-item, .b-stat, .score-box { 
+            background-color: var(--vault-bg);
+            padding: 12px 6px; 
+            border-radius: 14px; text-align: center; 
+            border: 1px solid var(--glass-border); 
         }
-        
-        .vault-grid { 
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 8px; 
-        }
-        .vault-item { 
-            background-color: var(--vault-bg); 
-            padding: 10px 4px; 
-            border-radius: 10px; 
-            text-align: center; 
-            border: 1px solid var(--panel-border); 
-            cursor: pointer; 
-        }
-        .v-lbl { 
-            font-size: 9px; 
-            color: var(--text-muted); 
-            display: block; 
-            margin-bottom: 3px; 
-            font-weight: bold;
-        }
-        .v-val { 
-            font-size: 13px; 
-            font-weight: 800; 
-            color: var(--text); 
-        } 
-        .v-sub { 
-            font-size: 8px; 
-            margin-top: 2px; 
-        }
-        .pnl-positive { color: var(--success); font-weight: bold; }
-        .pnl-negative { color: var(--danger); font-weight: bold; }
+        .v-lbl { font-size: 9px; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: bold; }
+        .v-val { font-size: 14px; font-weight: 800; color: var(--text); } 
+        .v-sub { font-size: 9px; margin-top: 4px; font-weight:bold; }
+        .pnl-positive { color: var(--success); }
+        .pnl-negative { color: var(--danger); }
 
-        .vault-actions { 
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 6px; 
-            margin-top: 12px; 
-        }
+        .vault-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 15px; }
         .v-btn { 
-            background-color: #334155; 
-            color: white; 
-            border: none; 
-            border-radius: 8px; 
-            padding: 10px 4px; 
-            font-size: 10px; 
-            font-weight: bold; 
-            cursor: pointer; 
+            background-color: var(--vault-bg); color: var(--text); 
+            border: 1px solid var(--glass-border); border-radius: 10px; 
+            padding: 10px 4px; font-size: 10px; font-weight: 800; cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: transform 0.1s;
         } 
+        .v-btn:active { transform: scale(0.95); }
 
-        /* DASHBOARD BALANCE MODULE */
-        .balance-card { 
-            background-color: var(--card-bg); 
-            border-radius: 16px; 
-            padding: 18px 20px; 
-            text-align: center; 
-            border: 1px solid var(--panel-border); 
-            position: relative;
-        }
-        .title { 
-            font-size: 10px; 
-            text-transform: uppercase; 
-            letter-spacing: 1.5px; 
-            color: var(--text-muted); 
-            margin-bottom: 6px; 
-            display:flex; 
-            justify-content:space-between; 
-            align-items:center;
-        }
-        .balance { 
-            font-size: 34px; 
-            font-weight: 800; 
-            margin: 0; 
-            color: var(--success); 
-        }
+        /* DASHBOARD MODULES */
+        .balance { font-size: 38px; font-weight: 800; margin: 5px 0; color: var(--success); letter-spacing: -1px; }
         .surplus-badge { 
-            position: absolute; 
-            top: 12px; 
-            right: 12px; 
-            font-size: 10px; 
-            font-weight: bold; 
-            padding: 4px 8px; 
-            border-radius: 8px; 
-            background: rgba(74, 222, 128, 0.1); 
-            color: var(--success); 
+            position: absolute; top: 12px; right: 12px; font-size: 10px; font-weight: 800; 
+            padding: 6px 10px; border-radius: 10px; background: rgba(16, 185, 129, 0.1); color: var(--success);
         }
         .progress-container { 
-            width: 100%; 
-            background-color: #334155; 
-            height: 6px; 
-            border-radius: 3px; 
-            margin-top: 12px; 
-            overflow: hidden; 
+            width: 100%; background-color: var(--panel-border); height: 8px; 
+            border-radius: 4px; margin-top: 12px; overflow: hidden;
         }
-        .progress-bar { 
-            height: 100%; 
-            width: 100%; 
-            background-color: var(--success); 
-            transition: width 0.5s ease-out; 
-        }
+        .progress-bar { height: 100%; width: 100%; background-color: var(--success); transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
 
-        /* SCOREBOARD (SAFE/OVER DAYS) */
-        .scoreboard-row { 
-            display: grid; 
-            grid-template-columns: repeat(2, 1fr); 
-            gap: 10px; 
-        }
-        .score-box { 
-            background-color: var(--card-bg); 
-            border: 1px solid var(--panel-border); 
-            border-radius: 12px; 
-            padding: 10px; 
-            text-align: center; 
-            cursor: pointer; 
-        }
-        .score-num { 
-            font-size: 18px; 
-            font-weight: 800; 
-            margin-top: 2px; 
-        } 
-        .score-box.green-box .score-num { color: var(--success); } 
-        .score-box.red-box .score-num { color: var(--danger); }
-
-        /* INPUTS & FORMS */
-        .form-panel { 
-            background-color: var(--card-bg); 
-            border-radius: 16px; 
-            padding: 14px; 
-            border: 1px solid var(--panel-border); 
-            display: flex; 
-            flex-direction: column; 
-            gap: 10px; 
-        }
-        .input-row { 
-            display: flex; 
-            gap: 8px; 
-            align-items: center; 
-        }
-        input, select { 
-            background-color: #0f172a; 
-            border: 1px solid var(--panel-border); 
-            border-radius: 10px; 
-            padding: 12px; 
-            color: var(--text); 
-            font-size: 14px; 
-            outline: none; 
-            box-sizing: border-box; 
-            width: 100%; 
-            -webkit-appearance: none; 
-        }
-        input[type="checkbox"] { 
-            -webkit-appearance: auto; 
-            width: 20px; 
-            height: 20px; 
-            padding: 0; 
-            margin: 0; 
-            cursor: pointer; 
-        }
-        input:focus, select:focus { 
-            border-color: var(--accent); 
-        }
+        .scoreboard-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .score-num { font-size: 20px; font-weight: 800; margin-top: 4px; } 
         
-        .flex-main { flex: 2; width: 50%; } 
-        .flex-side { flex: 1; width: 25%; text-align: center; }
+        /* INPUTS & FORMS */
+        .input-row { display: flex; gap: 8px; align-items: center; }
+        input, select { 
+            background-color: var(--vault-bg) !important;
+            border: 1px solid var(--glass-border) !important; 
+            border-radius: 12px; padding: 14px; color: var(--text) !important; 
+            font-size: 14px; outline: none; box-sizing: border-box; width: 100%; -webkit-appearance: none;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2); }
+        .flex-main { flex: 2; width: 50%; } .flex-side { flex: 1; width: 25%; text-align: center; }
         
         .btn-action { 
-            background-color: var(--accent); 
-            color: #0f172a; 
-            border: none; 
-            border-radius: 10px; 
-            padding: 12px; 
-            font-size: 14px; 
-            font-weight: 700; 
-            cursor: pointer; 
+            background-color: var(--accent); color: #fff; border: none; border-radius: 12px; 
+            padding: 14px; font-size: 14px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(14, 165, 233, 0.3);
         }
         .expand-btn { 
-            background: none; 
-            border: 1px solid var(--panel-border); 
-            color: var(--text-muted); 
-            border-radius: 10px; 
-            padding: 12px; 
-            cursor: pointer; 
-            font-size: 14px; 
+            background: var(--vault-bg); border: 1px solid var(--glass-border); color: var(--text-muted); 
+            border-radius: 12px; padding: 14px; cursor: pointer; font-size: 14px;
         }
         .advanced-context-box { 
-            display: none; 
-            flex-direction: column; 
-            gap: 8px; 
-            background-color: var(--vault-bg); 
-            padding: 12px; 
-            border-radius: 10px; 
-            border: 1px dashed var(--panel-border); 
+            display: none; flex-direction: column; gap: 10px; background-color: var(--vault-bg); 
+            padding: 14px; border-radius: 14px; border: 1px dashed var(--panel-border); margin-top: 4px;
         }
         .btn-secondary { 
-            background-color: var(--card-bg); 
-            color: var(--text-muted); 
-            border: 1px solid var(--panel-border); 
-            border-radius: 12px; 
-            padding: 10px; 
-            font-size: 12px; 
-            font-weight: 600; 
-            cursor: pointer; 
-            width: 100%; 
-            margin-top: 5px; 
+            background-color: var(--vault-bg); color: var(--text-muted); border: 1px solid var(--glass-border); 
+            border-radius: 12px; padding: 12px; font-size: 12px; font-weight: 700; cursor: pointer; width: 100%; 
+            margin-top: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
 
-        /* LISTS (HISTORY, IOUS) - REMOVED ANIMATIONS */
-        .history-card { 
-            background-color: var(--card-bg); 
-            border-radius: 16px; 
-            padding: 16px; 
-            max-height: 280px; 
-            overflow-y: auto; 
-            border: 1px solid var(--panel-border); 
-        }
+        /* LISTS (HISTORY, IOUS) */
+        .history-card { max-height: 300px; overflow-y: auto; }
         .history-item { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 10px 0; 
-            border-bottom: 1px solid var(--panel-border); 
-            font-size: 13px; 
-            opacity: 1; /* Forced visible, bug fix */
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 12px 0; border-bottom: 1px solid var(--glass-border); font-size: 13px; 
         } 
-        .history-item:last-child { 
-            border-bottom: none; 
-        }
-        .history-details { 
-            font-size: 10px; 
-            color: var(--text-muted); 
-            margin-top: 4px; 
-            line-height: 1.3; 
-        }
-        .edit-btn { 
-            background: none; 
-            border: none; 
-            color: var(--text-muted); 
-            cursor: pointer; 
-            padding: 0 4px; 
-            font-size: 14px; 
-        } 
-        .cat-badge { 
-            background: #334155; 
-            color: white; 
-            padding: 2px 6px; 
-            border-radius: 4px; 
-            font-size: 8px; 
-            margin-left: 6px; 
-            vertical-align: middle; 
-        }
+        .history-item:last-child { border-bottom: none; }
+        .history-details { font-size: 10px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
+        .edit-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0 4px; font-size: 16px; } 
+        .cat-badge { background: var(--panel-border); color: var(--text); padding: 3px 8px; border-radius: 6px; font-size: 9px; margin-left: 8px; font-weight: bold; }
         
         .iou-item { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 10px; 
-            background: var(--vault-bg); 
-            border-radius: 8px; 
-            margin-bottom: 8px; 
-            border: 1px solid var(--panel-border); 
-            opacity: 1; /* Forced visible, bug fix */
+            display: flex; justify-content: space-between; align-items: center; padding: 12px; 
+            background: var(--vault-bg); border-radius: 12px; margin-bottom: 10px; border: 1px solid var(--glass-border); 
         }
-        .iou-btn { 
-            background: var(--accent); 
-            color: #000; 
-            border: none; 
-            border-radius: 6px; 
-            padding: 6px 12px; 
-            font-size: 10px; 
-            font-weight: bold; 
-            cursor: pointer; 
-        }
+        .iou-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 11px; font-weight: 800; cursor: pointer; }
 
         /* V38 UI ELEMENTS */
-        .waterfall-container { 
-            width: 100%; 
-            background-color: #0f172a; 
-            height: 12px; 
-            border-radius: 6px; 
-            overflow: hidden; 
-            display: flex; 
-            margin-top: 6px; 
-            border: 1px solid var(--panel-border); 
-        }
-        .wf-tier1 { background-color: #38bdf8; height: 100%; transition: width 0.5s ease-out; }
+        .waterfall-container { width: 100%; background-color: var(--panel-border); height: 12px; border-radius: 6px; overflow: hidden; display: flex; margin-top: 8px; border: 1px solid var(--glass-border); }
+        .wf-tier1 { background-color: var(--accent); height: 100%; transition: width 0.5s ease-out; }
         .wf-tier2 { background-color: var(--success); height: 100%; transition: width 0.5s ease-out; }
         
-        .scrollable-list { 
-            max-height: 200px; 
-            overflow-y: auto; 
-            padding-right: 5px; 
-        }
+        .scrollable-list { max-height: 200px; overflow-y: auto; padding-right: 5px; }
         .scrollable-list::-webkit-scrollbar { width: 4px; }
         .scrollable-list::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 4px; }
 
-        .chart-row { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            font-size: 11px; 
-            margin: 6px 0; 
-        }
-        .chart-bar-bg { 
-            flex: 1; 
-            background-color: #0f172a; 
-            height: 6px; 
-            border-radius: 3px; 
-            margin: 0 8px; 
-            overflow: hidden; 
-        }
-        .chart-bar-fill { 
-            background-color: var(--accent); 
-            height: 100%; 
-            width: 0%; 
-            transition: width 0.6s ease-out; 
-        }
-
-        /* MODALS & OVERLAYS */
+        /* GLASSMORPHISM MODALS */
         .modal-overlay { 
-            display: none; 
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            background: rgba(0,0,0,0.85); 
-            z-index: 999; /* Forced high to prevent ghost clicks */
-            justify-content: center; 
-            align-items: center; 
-            padding: 20px; 
-            box-sizing: border-box; 
-            backdrop-filter: blur(5px); 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); z-index: 999; justify-content: center; align-items: center; 
+            padding: 20px; box-sizing: border-box; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
         }
         .modal-content { 
-            background-color: var(--card-bg); 
-            border-radius: 16px; 
-            padding: 20px; 
-            width: 100%; 
-            max-width: 350px; 
-            border: 1px solid var(--panel-border); 
-            max-height: 85vh; 
-            overflow-y: auto; 
+            background-color: var(--card-bg); border-radius: 24px; padding: 24px; width: 100%; 
+            max-width: 350px; border: 1px solid var(--glass-border); max-height: 85vh; overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .modal-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 10px; 
-            margin-top: 15px;
-        }
-        .modal-input-group { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 4px; 
-        }
-        .modal-input-group label { 
-            font-size: 10px; 
-            color: var(--text-muted); 
-            font-weight: bold;
-        }
-        .modal-btn-row { 
-            display: flex; 
-            gap: 10px; 
-            margin-top: 20px; 
-        }
-
-        .b-stat { 
-            background: var(--vault-bg); 
-            padding: 10px; 
-            border-radius: 10px; 
-            margin-bottom: 10px; 
-            border: 1px solid var(--panel-border); 
-            font-size: 12px;
-        }
-        .b-stat span { color: var(--accent); font-weight: bold; float: right;}
-
-        /* V38 EMERGENCY BANNER */
-        #optimizationBanner {
-            display: none;
-            position: fixed;
-            top: env(safe-area-inset-top, 10px);
-            left: 10%;
-            width: 80%;
-            background-color: rgba(74, 222, 128, 0.95);
-            color: #0f172a;
-            font-weight: bold;
-            font-size: 12px;
-            text-align: center;
-            padding: 10px;
-            border-radius: 12px;
-            z-index: 9999;
-            box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
-            transition: opacity 1s ease;
-        }
-
-        #appLockScreen { display: none; }
+        @keyframes scaleUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         
-        #printArea { display: none; }
+        .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }
+        .modal-input-group { display: flex; flex-direction: column; gap: 6px; }
+        .modal-input-group label { font-size: 10px; color: var(--text-muted); font-weight: 800; text-transform: uppercase;}
+        .modal-btn-row { display: flex; gap: 12px; margin-top: 24px; }
+
+        #optimizationBanner {
+            display: none; position: fixed; top: env(safe-area-inset-top, 10px); left: 10%; width: 80%;
+            background-color: var(--success); color: #fff; font-weight: bold; font-size: 12px; text-align: center;
+            padding: 12px; border-radius: 12px; z-index: 9999; box-shadow: 0px 4px 15px rgba(0,0,0,0.2); transition: opacity 1s ease;
+        }
+
+        #appLockScreen, #printArea { display: none; }
         @media print { 
             body > * { display: none !important; } 
             body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; background: white; color: #0f172a; padding: 0; margin: 0; box-sizing: border-box; } 
+            #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; background: white; color: #000; padding: 0; margin: 0; box-sizing: border-box; } 
         }
     </style>
+
 </head>
 <body>
 
@@ -1173,7 +873,16 @@
         </div>
 
         <div id="tab-settings" class="page-section">
-            
+
+            <div class="vault-card" style="border-color:var(--panel-border);">
+                <div class="title" style="color:var(--text);">🎨 App Appearance</div>
+                <select id="themeSelector" onchange="applyThemeEngine(this.value)" style="margin-bottom:10px;">
+                    <option value="auto">⚙️ Auto (Follow System Settings)</option>
+                    <option value="dark">🌙 Dark Mode (Neo-Fintech Slate)</option>
+                    <option value="light">☀️ Light Mode (Crisp White)</option>
+                </select>
+            </div>
+
             <div class="vault-card" style="border-color:#38bdf8;">
                 <div class="title" style="color:#38bdf8;">Waterfall Strategy</div>
                 <div class="input-row">
@@ -2441,6 +2150,7 @@
         // Security stripped for rapid testing
         document.getElementById('appLockScreen').style.display = 'none';
         document.getElementById('appWrapper').style.display = 'flex';
+        initThemeEngine();
         renderApp();
     }
 
@@ -2774,13 +2484,43 @@ function setPaycheckWizardType(type) {
         }
     }
 
+    // 1. Initialize Theme on App Load
+    function initThemeEngine() {
+        let saved = localStorage.getItem('cw_theme') || 'auto';
+        let selector = document.getElementById('themeSelector');
+        if(selector) selector.value = saved;
+        applyThemeEngine(saved);
+    }
+
+    // 2. The Master Switch
+    function applyThemeEngine(theme) {
+        localStorage.setItem('cw_theme', theme);
+        if (theme === 'auto') {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        } else {
+            document.documentElement.setAttribute('data-theme', theme);
+        }
+        applyTheme(); // Re-apply the accent colors
+    }
+
+    // 3. Dynamic Mode Accents (Upgraded to modern hex codes)
     function applyTheme() {
         if (s.mode === 'vacation') {
-            document.documentElement.style.setProperty('--accent', '#fbbf24');
+            document.documentElement.style.setProperty('--accent', '#f59e0b'); // Sunset Amber
         } else {
-            document.documentElement.style.setProperty('--accent', '#38bdf8');
+            document.documentElement.style.setProperty('--accent', '#0ea5e9'); // Electric Sky Blue
         }
     }
+
+    // Listen for iPhone system changes if set to Auto
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+        if (localStorage.getItem('cw_theme') === 'auto') applyThemeEngine('auto');
+    });
+
 
     function populateProjectDropdowns() {
         let html = `<option value="none">📌 General Daily Spend (No Project)</option>`;
