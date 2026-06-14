@@ -221,8 +221,8 @@
             body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; background: white; color: #000; padding: 0; margin: 0; box-sizing: border-box; } 
         }
-                /* =========================================
-           NEO-FINTECH BUG FIXES & OVERRIDES
+        /* =========================================
+           NEO-FINTECH BUG FIXES & OVERRIDES (V2)
            ========================================= */
         
         /* 1. Anchor the Floating Surplus Badge */
@@ -230,27 +230,47 @@
             position: relative !important; 
         }
 
-        /* 2. Neutralize Legacy Hardcoded Dark Backgrounds */
+        /* 2. Catch ALL Legacy Dark Backgrounds (With & Without Spaces) */
         [style*="background-color:#0f172a"], 
-        [style*="background:#0f172a"],
+        [style*="background-color: #0f172a"], 
+        [style*="background:#0f172a"], 
+        [style*="background: #0f172a"],
+        [style*="background:#1e293b"],
+        [style*="background: #1e293b"],
+        .advanced-context-box, 
         #masterCatBreakdown {
             background-color: var(--vault-bg) !important;
             background: var(--vault-bg) !important;
             border-color: var(--glass-border) !important;
         }
 
-        /* 3. Fix Unreadable Text in Light Mode */
-        [style*="color:#f8fafc"] {
+        /* 3. Catch ALL Legacy Text Colors (With & Without Spaces) */
+        [style*="color:#f8fafc"], 
+        [style*="color: #f8fafc"],
+        [style*="color:#ffffff"], 
+        [style*="color: #ffffff"] {
             color: var(--text) !important;
         }
-        [style*="color:#94a3b8"] {
+        [style*="color:#94a3b8"], 
+        [style*="color: #94a3b8"] {
             color: var(--text-muted) !important;
         }
 
-        /* 4. Clean up the Master Breakdown Borders */
-        [style*="border-bottom:1px solid #1e293b"] {
-            border-bottom: 1px dashed var(--glass-border) !important;
+        /* 4. Fix Borders and Layout in Analytics */
+        [style*="border-bottom:1px solid #1e293b"], 
+        [style*="border-bottom: 1px solid #1e293b"],
+        [style*="border-color:#1e293b"],
+        [style*="border-color: #1e293b"] {
+            border-color: var(--glass-border) !important;
+            border-bottom-color: var(--glass-border) !important;
         }
+        
+        /* Force Master Category rows to be readable in Light Mode */
+        #masterCatBreakdown div {
+            color: var(--text) !important;
+            border-color: var(--glass-border) !important;
+        }
+
 
     </style>
 
