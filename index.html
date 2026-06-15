@@ -251,6 +251,16 @@
         <!-- TAB 1: DASHBOARD                           -->
         <!-- ========================================== -->
         <div id="tab-dash" class="page-section active">
+
+            <div class="vault-card" style="border-color:var(--accent); margin-bottom:14px; background:var(--card-bg);">
+                <div class="title" style="color:var(--text); border-bottom:1px dashed var(--glass-border); padding-bottom:8px; margin-bottom:4px;">
+                    📡 Daily Briefing (<span id="radarModeLbl">TND</span>)
+                </div>
+                <div id="radarContent" style="display:flex; flex-direction:column;">
+                    <span style="font-size:10px; color:var(--text-muted); padding:8px 0;">Calibrating radar...</span>
+                </div>
+            </div>
+
             
             <!-- LIQUID RUNWAY & WEALTH VAULT -->
             <div class="vault-card clickable" style="border-color: var(--accent); position: relative; overflow: hidden;" onclick="openDiagnosticsModal()">
@@ -3058,9 +3068,95 @@ function setPaycheckWizardType(type) {
         }
     }
 
+    
+    function runPredictiveRadar() {
+        let modeData = s.history[s.mode];
+        let today = new Date();
+        let todayDay = today.getDay(); // 0 (Sun) to 6 (Sat)
+        let dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        let sym = s.mode === 'vacation' ? 'TND' : 'USD';
+        let limit = parseFloat(modeData.limit) || 0;
+
+        document.getElementById('radarModeLbl').innerText = sym;
+
+        // 1. Calculate Day-of-Week Velocity
+        let dayTotals = [];
+        (modeData.archive || []).forEach(d => {
+            let dObj = new Date(d.date);
+            if (!isNaN(dObj) && dObj.getDay() === todayDay) {
+                let spent = (d.logs || []).reduce((sum, item) => {
+                    if (item.category === "🏦 Financial & Fees" || item.bypassLimit) return sum;
+                    return sum + (parseFloat(item.amount) || 0);
+                }, 0);
+                dayTotals.push(spent);
+            }
+        });
+
+        let dayAvg = 0;
+        if (dayTotals.length > 0) dayAvg = dayTotals.reduce((a, b) => a + b, 0) / dayTotals.length;
+
+        // 2. Calculate Weekly Momentum (Last 7 Days vs Prev 7 Days)
+        let last7 = 0; let prev7 = 0;
+        let nowTs = today.getTime();
+
+        (modeData.archive || []).forEach(d => {
+            let dTs = new Date(d.date).getTime();
+            if (!isNaN(dTs)) {
+                let diffDays = (nowTs - dTs) / 86400000;
+                let spent = (d.logs || []).reduce((sum, item) => sum + (!item.bypassLimit && item.category !== "🏦 Financial & Fees" ? parseFloat(item.amount)||0 : 0), 0);
+                if (diffDays <= 7) last7 += spent;
+                else if (diffDays > 7 && diffDays <= 14) prev7 += spent;
+            }
+        });
+        
+        let todaySpent = (modeData.current || []).reduce((sum, item) => sum + (!item.bypassLimit && item.category !== "🏦 Financial & Fees" ? parseFloat(item.amount)||0 : 0), 0);
+        last7 += todaySpent;
+
+        // 3. Generate the Briefing
+        let insights = [];
+
+        // Insight A: Day of Week Pacing
+        if (dayTotals.length >= 2) {
+            if (dayAvg > limit) {
+                insights.push(`⚠️ <b>${dayNames[todayDay]} Warning:</b> You typically spend heavily (${dayAvg.toFixed(1)} ${sym}) on this day. Guard your limit.`);
+            } else {
+                insights.push(`☕ <b>${dayNames[todayDay]} Trend:</b> Your historical average for today is a safe ${dayAvg.toFixed(1)} ${sym}.`);
+            }
+        }
+
+        // Insight B: Weekly Velocity Matrix
+        if (last7 > 0 && prev7 > 0) {
+            let pct = ((last7 - prev7) / prev7) * 100;
+            if (pct > 20) {
+                insights.push(`📈 <b>Velocity Alert:</b> Your 7-day burn (${last7.toFixed(1)} ${sym}) is running ${pct.toFixed(0)}% hotter than last week.`);
+            } else if (pct < -20) {
+                insights.push(`📉 <b>Capital Defense:</b> Excellent. Your 7-day burn is ${Math.abs(pct).toFixed(0)}% lower than last week.`);
+            } else if (Math.abs(pct) <= 20) {
+                insights.push(`⚖️ <b>Stable Pacing:</b> Your weekly burn (${last7.toFixed(1)} ${sym}) is matching your historical baseline.`);
+            }
+        }
+
+        // Insight C: Failsafe if no data
+        if (insights.length === 0) {
+            insights.push(`✨ Not enough historical data in <b>${s.mode === 'vacation' ? 'Vacation' : 'Onboard'} Mode</b> yet to generate predictions. Keep logging!`);
+        }
+
+        // 4. Inject into UI
+        let html = '';
+        insights.forEach((ins, idx) => {
+            let borderStyle = idx === insights.length - 1 ? 'none' : '1px dashed var(--glass-border)';
+            html += `<div style="font-size:11px; padding:6px 0; border-bottom:${borderStyle}; color:var(--text); line-height:1.4;">${ins}</div>`;
+        });
+
+        document.getElementById('radarContent').innerHTML = html;
+    }
+
 
     function renderDashboard() {
         let fx = parseFloat(s.fx_rate) || 2.923;
+        // Run Predictive Radar
+        if (document.getElementById('radarContent')) runPredictiveRadar();
+
         
         // --- 1. Top Vault Grid (IBKR & Static Balances) ---
         let ibkrTot = parseFloat(s.vault.ibkr) || 0;
