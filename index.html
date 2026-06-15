@@ -2689,10 +2689,8 @@ function setPaycheckWizardType(type) {
         let totalOver = 0; 
         let totalSafe = 0;
         
-        let combined = [
-            ...(s.history.vacation.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'vacation' })), 
-            ...(s.history.onboard.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'onboard' }))
-        ].sort((a, b) => new Date(a.d) - new Date(b.d));
+        let combined = getUnifiedHistory();
+
         
         combined.forEach(day => {
             let activeLimit = parseFloat(day.l) || parseFloat(s.history[day.m].limit) || 0;
@@ -2786,10 +2784,8 @@ function setPaycheckWizardType(type) {
         let totalOverSpend = 0;
         let totalOverage = 0;
         
-        let combined = [
-            ...(s.history.vacation.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'vacation' })), 
-            ...(s.history.onboard.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'onboard' }))
-        ];
+        let combined = getUnifiedHistory();
+
 
         combined.forEach(day => {
             let activeLimit = parseFloat(day.l) || parseFloat(s.history[day.m].limit) || 0;
@@ -2840,10 +2836,8 @@ function setPaycheckWizardType(type) {
         let safeDaysList = [];
         let totalSafeSpend = 0;
         
-        let combined = [
-            ...(s.history.vacation.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'vacation' })), 
-            ...(s.history.onboard.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'onboard' }))
-        ];
+        let combined = getUnifiedHistory();
+
 
         combined.forEach(day => {
             let activeLimit = parseFloat(day.l) || parseFloat(s.history[day.m].limit) || 0;
@@ -4147,7 +4141,17 @@ if(document.getElementById('advVapeBrand')) {
     }
 
 
-    
+
+    // ==========================================
+    // 8.5. DATA AGGREGATION ENGINE (V2)
+    // ==========================================
+    function getUnifiedHistory() {
+        return [
+            ...(s.history.vacation.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'vacation' })), 
+            ...(s.history.onboard.archive || []).map(a => ({ d: a.date, l: a.limit, logs: a.logs, m: 'onboard' }))
+        ].sort((a, b) => new Date(a.d) - new Date(b.d));
+    }
+
     // ==========================================
     // 9. ANALYTICS RENDERING (PROJECTS, VAPES, CHARTS)
     // ==========================================
