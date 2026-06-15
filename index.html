@@ -4296,7 +4296,7 @@ if(document.getElementById('advVapeBrand')) {
     function renderProjects() {
         let archHtml = '';
 
-               // Helper for Envelopes & Missions
+                       // Helper for Envelopes & Missions
         let generateHTML = (obj, prefix) => {
             let actHtml = '';
             Object.keys(obj || {}).forEach(k => {
@@ -4306,35 +4306,38 @@ if(document.getElementById('advVapeBrand')) {
                 let pct = tgt > 0 ? Math.min((spt / tgt) * 100, 100) : 0;
                 let typeLabel = prefix === 'env' ? 'Envelope' : 'Mission';
 
-                let h = `<div class="vault-item" style="text-align:left; border:${p.archived ? '1px dashed #64748b' : '1px solid var(--panel-border)'};">`;
-                h += `<div style="display:flex; justify-content:space-between; align-items:center;">`;
-                h += `<strong>${p.name || 'Untitled'} ${p.archived ? `(${typeLabel})` : ''}</strong>`;
+                let h = `<div class="vault-item" style="text-align:left; display:flex; flex-direction:column; border:${p.archived ? '1px dashed #64748b' : '1px solid var(--panel-border)'};">`;
+                
+                // TOP ROW: Clean Title
+                h += `<div style="font-size:13px; font-weight:bold; color:var(--text);">${p.name || 'Untitled'} ${p.archived ? ` <span style="font-size:9px; font-weight:normal; color:var(--text-muted);">(${typeLabel})</span>` : ''}</div>`;
 
-                h += `<div style="display:flex; gap:8px;">`;
-                if (!p.archived) {
-                    h += `<button onclick="openProjectLedger('${k}', '${prefix}')" style="background:none; border:none; font-size:10px; color:var(--accent); font-weight:bold; cursor:pointer;">📖 Ledger</button>`;
-                    h += `<button onclick="editProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--success); cursor:pointer;">Edit</button>`;
-                    h += `<button onclick="archiveProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--warning); cursor:pointer;">Archive</button>`;
+                // MIDDLE ROW: Progress Bar
+                if (tgt === 0) {
+                    h += `<div style="font-size:10px; margin-top:8px; color:var(--text-muted);">Total Spent: <span style="color:var(--text); font-weight:bold;">${spt.toFixed(2)} ${p.currency}</span> <span style="color:var(--accent);">(Open)</span></div>`;
                 } else {
-                    h += `<button onclick="openProjectLedger('${k}', '${prefix}')" style="background:none; border:none; font-size:10px; color:var(--accent); font-weight:bold; cursor:pointer;">📖 Ledger</button>`;
-                    h += `<button onclick="deleteProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Delete</button>`;
+                    h += `<div class="progress-container" style="height:4px; margin-top:10px;">`;
+                    h += `<div class="progress-bar" style="width:${pct}%; background:${pct >= 100 ? 'var(--danger)' : 'var(--accent)'};"></div></div>`;
+                    h += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${spt.toFixed(2)} / ${tgt.toFixed(2)} ${p.currency}</div>`;
+                }
+
+                // BOTTOM ROW: Dedicated Action Bar
+                h += `<div style="display:flex; justify-content:flex-end; gap:12px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--glass-border);">`;
+                h += `<button onclick="openProjectLedger('${k}', '${prefix}')" style="background:none; border:none; font-size:11px; color:var(--accent); font-weight:bold; cursor:pointer;">📖 Ledger</button>`;
+                
+                if (!p.archived) {
+                    h += `<button onclick="editProject('${prefix}', '${k}')" style="background:none; border:none; font-size:11px; color:var(--success); font-weight:bold; cursor:pointer;">✏️ Edit</button>`;
+                    h += `<button onclick="archiveProject('${prefix}', '${k}')" style="background:none; border:none; font-size:11px; color:var(--warning); font-weight:bold; cursor:pointer;">📦 Archive</button>`;
+                } else {
+                    h += `<button onclick="deleteProject('${prefix}', '${k}')" style="background:none; border:none; font-size:11px; color:var(--danger); font-weight:bold; cursor:pointer;">🗑️ Delete</button>`;
                 }
                 h += `</div></div>`;
-
-                // SMART RENDER: Check if it's an open mission (target = 0)
-                if (tgt === 0) {
-                    h += `<div style="font-size:10px; margin-top:8px; color:var(--text-muted);">Total Spent: <span style="color:var(--text); font-weight:bold;">${spt.toFixed(2)} ${p.currency}</span> <span style="color:var(--accent);">(Open)</span></div></div>`;
-                } else {
-                    h += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
-                    h += `<div class="progress-bar" style="width:${pct}%; background:${pct >= 100 ? 'var(--danger)' : 'var(--accent)'};"></div></div>`;
-                    h += `<div style="font-size:9px; margin-top:4px; color:var(--text-muted);">${spt.toFixed(2)} / ${tgt.toFixed(2)} ${p.currency}</div></div>`;
-                }
 
                 if (p.archived) archHtml += h;
                 else actHtml += h;
             });
             return actHtml;
         };
+
 
 
 
