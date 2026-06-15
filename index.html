@@ -529,6 +529,33 @@
                 <div class="title" style="margin-bottom: 4px;">Today's Activity</div>
                 <div id="historyList"></div>
             </div>
+                        <div class="vault-card" style="margin-top:15px; border-color:var(--accent); background:var(--card-bg); display:none;" id="deploymentRadarWidget">
+                <div class="title" style="color:var(--text); border-bottom:1px dashed var(--glass-border); padding-bottom:8px; margin-bottom:12px;">
+                    ⚓ Contract Sign-Off Projection
+                </div>
+                
+                <div style="font-size:12px; margin-bottom:6px; display:flex; justify-content:space-between;">
+                    <span style="color:var(--text-muted);">Future Operating Income:</span>
+                    <strong id="radarNetInc" style="color:var(--success);">0.00</strong>
+                </div>
+                <div style="font-size:12px; margin-bottom:6px; display:flex; justify-content:space-between;">
+                    <span style="color:var(--text-muted);">Future Projected Burn:</span>
+                    <strong id="radarProjBurn" style="color:var(--danger);">0.00</strong>
+                </div>
+                <div style="font-size:12px; margin-bottom:6px; display:flex; justify-content:space-between;">
+                    <span style="color:var(--text-muted);">Locked Earmarks/Buffers:</span>
+                    <strong id="radarEarmarked" style="color:var(--warning);">0.00</strong>
+                </div>
+                <div style="border-top:1px dashed var(--glass-border); margin-top:10px; padding-top:10px; font-size:14px; display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color:var(--text);">Liquid Sign-Off Capital:</strong>
+                    <strong id="radarLiquidSignOff" style="color:var(--accent); font-size:16px;">0.00 USD</strong>
+                </div>
+                
+                <div style="font-size:10px; text-align:center; color:var(--text-muted); margin-top:12px; background:rgba(15, 23, 42, 0.05); padding:6px; border-radius:4px;">
+                    Based on your <strong id="radarOpPct">45%</strong> ops split and <strong id="radarVelocity" style="color:var(--text);">0.00 USD</strong>/day velocity.
+                </div>
+            </div>
+
         </div>
 
         <!-- ========================================== -->
@@ -3264,11 +3291,125 @@ function setPaycheckWizardType(type) {
         document.getElementById('radarContent').innerHTML = html;
     }
 
+    // ==========================================
+    // V2 ZERO-BLOAT RADAR ENGINE
+    // ==========================================
+    function renderDeploymentRadar() {
+        let widget = document.getElementById('deploymentRadarWidget');
+        if (!widget) return;
+        
+        if (s.mode !== 'onboard') {
+            widget.style.display = 'none';
+            return;
+        }
+        widget.style.display = 'block';
 
+        // 1. Calculate Projected Gross Remainder (via existing Milestones)
+        let milestones = generateContractMilestones();
+        let nextPending = getNextPendingMilestone(milestones);
+        let pendingCommissions = calculatePendingCommissionsForMilestone(nextPending);
+        
+        let historicalCommissions = [];
+        (s.income_logs || []).forEach(log => {
+            if (log.source === 'paycheck' && log.isContractPayday && log.baseSalarySnapshot) {
+                let biweeklyBase = (parseFloat(log.baseSalarySnapshot) * 12) / 26;
+                let comm = parseFloat(log.amount) - biweeklyBase;
+                if (comm > 0) historicalCommissions.push(comm);
+            }
+        });
+        
+        let avgCommission = 60;
+        if (historicalCommissions.length > 0) {
+            avgCommission = historicalCommissions.reduce((a, b) => a + b, 0) / historicalCommissions.length;
+        } else if (s.contract_profile.voyages && s.contract_profile.voyages.length > 0) {
+            avgCommission = s.contract_profile.voyages.reduce((sum, v) => sum + (parseFloat(v.estimatedCommission) || 0), 0) / s.contract_profile.voyages.length;
+        }
+            
+        let projectedGross = 0;
+        milestones.forEach(m => {
+            if (m.status === 'pending') {
+                let biweeklyBase = ((parseFloat(s.contract_profile.baseSalary) || 2113.04) * 12) / 26;
+                if (m.isDryDock) { projectedGross += biweeklyBase; }
+                else if (nextPending && m.index === nextPending.index) { projectedGross += (biweeklyBase + pendingCommissions); }
+                else { projectedGross += (biweeklyBase + avgCommission); }
+            }
+        });
+
+        // 2. Apply the Smart Paycheck Wizard's Operation Split
+        let opPct = s.contract_profile.lastOpPct !== undefined ? parseFloat(s.contract_profile.lastOpPct) : 45;
+        let opIncome = projectedGross * (opPct / 100);
+
+        // 3. Calculate 14-Day Velocity (Onboard Only)
+        let nowTs = Date.now();
+        let last14Spent = 0;
+        
+        let onboardHistory = getUnifiedHistory().filter(x => x.m === 'onboard');
+        onboardHistory.forEach(day => {
+            let dTs = new Date(day.d).getTime();
+            if (!isNaN(dTs)) {
+                let diffDays = (nowTs - dTs) / 86400000;
+                if (diffDays <= 14 && diffDays >= 0) {
+                    (day.logs || []).forEach(l => {
+                        if (!l.bypassLimit && l.category !== "🏦 Financial & Fees") {
+                            last14Spent += (parseFloat(l.amount) || 0);
+                        }
+                    });
+                }
+            }
+        });
+        (s.history.onboard.current || []).forEach(l => {
+            if (!l.bypassLimit && l.category !== "🏦 Financial & Fees") {
+                 last14Spent += (parseFloat(l.amount) || 0);
+            }
+        });
+
+        let velocityPerDay = last14Spent / 14; 
+        
+        let cEnd = new Date(s.settings.contractEnd + 'T23:59:59').getTime();
+        let daysLeft = Math.max(0, Math.ceil((cEnd - nowTs) / 86400000));
+        let projectedBurn = velocityPerDay * daysLeft;
+
+        // 4. Earmark Extraction (Goals & Envelopes)
+        let fx = parseFloat(s.fx_rate) || 2.923;
+        let earmarkedUSD = 0;
+        
+        (s.projects.goals || []).forEach(g => {
+            if (!g.archived) {
+                let amt = parseFloat(g.saved) || 0;
+                if (g.currency === 'TND') amt = amt / fx; 
+                earmarkedUSD += amt;
+            }
+        });
+        
+        Object.keys(s.projects.envelopes || {}).forEach(k => {
+            let e = s.projects.envelopes[k];
+            if (!e.archived) {
+                let rem = (parseFloat(e.target) || 0) - (parseFloat(e.spent) || 0);
+                if (rem > 0) {
+                    let amt = rem;
+                    if (e.currency === 'TND') amt = amt / fx; 
+                    earmarkedUSD += amt;
+                }
+            }
+        });
+
+        // 5. Final Liquid Calculation
+        let liquid = opIncome - projectedBurn - earmarkedUSD;
+
+        document.getElementById('radarOpPct').innerText = opPct + '%';
+        document.getElementById('radarNetInc').innerText = '+' + opIncome.toFixed(2);
+        document.getElementById('radarProjBurn').innerText = '-' + projectedBurn.toFixed(2);
+        document.getElementById('radarEarmarked').innerText = '-' + earmarkedUSD.toFixed(2);
+        document.getElementById('radarLiquidSignOff').innerText = liquid.toFixed(2) + ' USD';
+        document.getElementById('radarVelocity').innerText = velocityPerDay.toFixed(2);
+    }
+
+    
     function renderDashboard() {
         let fx = parseFloat(s.fx_rate) || 2.923;
         // Run Predictive Radar
         if (document.getElementById('radarContent')) runPredictiveRadar();
+        renderDeploymentRadar();
 
         
         // --- 1. Top Vault Grid (IBKR & Static Balances) ---
@@ -5330,7 +5471,11 @@ function processPaycheck() {
     let oA = parseFloat(document.getElementById('pwOpAmt').value) || 0; 
     let lA = parseFloat(document.getElementById('pwLoanAmt').value) || 0; 
     let sA = parseFloat(document.getElementById('pwSavAmt').value) || 0;
-    
+    // V2 Radar: Save deduction preferences automatically
+    s.contract_profile.lastLoanPct = parseFloat(document.getElementById('pwLoanPct').value) || 0;
+    s.contract_profile.lastSavPct = parseFloat(document.getElementById('pwSavPct').value) || 0;
+    s.contract_profile.lastOpPct = parseFloat(document.getElementById('pwOpPct').value) || 0;
+
     if (g <= 0) return alert("Enter a valid gross pay.");
     if (oA > 0) s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + oA;
     
