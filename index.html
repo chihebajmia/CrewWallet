@@ -4914,7 +4914,7 @@ if(document.getElementById('advVapeBrand')) {
         
         purchaseDates.sort((a, b) => a.getTime() - b.getTime());
 
-                /* 2. Unified Dynamic Burn Rate */
+        /* 2. Unified Dynamic Burn Rate */
         let inv = s.vape_stash.inventory || [];
         let trueVapeBurnRate = getDynamicVapeBurnRate();
 
@@ -4995,15 +4995,36 @@ if(document.getElementById('advVapeBrand')) {
         if(actives.length > 0) {
             h += `<div style="margin-top:8px; color:var(--success); font-size:10px; font-weight:bold;">🟢 Active Units</div>`;
             actives.forEach(v => {
-                let activeDays = v.opened_ts ? ((Date.now() - v.opened_ts)/86400000).toFixed(1) : "?";
+                let activeDaysNum = v.opened_ts ? ((Date.now() - v.opened_ts)/86400000) : 0;
+                let activeDays = activeDaysNum > 0 ? activeDaysNum.toFixed(1) : "?";
                 let puffStr = v.puffs ? (v.puffs + " Puffs") : "";
                 let mlStr = v.ml ? (v.ml + " ML") : "";
-                h += `<div class="iou-item" style="padding:8px; border-color:var(--success);">`;
-                h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">${puffStr} ${mlStr} (Active: ${activeDays}d)</div></div>`;
-                h += `<div style="display:flex; gap:6px;">
-                        <button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer;">✏️</button>
-                        <button onclick="markVapeDead('${v.id}')" class="iou-btn" style="background:var(--danger); color:#fff; font-size:9px;">KILL</button>
-                      </div></div>`;
+                
+                // NEW: Mathematical Health Bar & Est Death
+                let estLifeLeft = Math.max(0, trueVapeBurnRate - activeDaysNum);
+                let healthPct = Math.max(0, Math.min(100, (estLifeLeft / trueVapeBurnRate) * 100));
+                let healthColor = healthPct > 30 ? 'var(--success)' : (healthPct > 15 ? 'var(--warning)' : 'var(--danger)');
+                let deathDate = new Date(Date.now() + (estLifeLeft * 86400000)).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+                
+                let warningHtml = '';
+                if (healthPct <= 15) {
+                    warningHtml = `<div style="font-size:9px; color:var(--danger); font-weight:bold; margin-top:8px; text-transform:uppercase; text-align:center; padding:4px; background:rgba(239, 68, 68, 0.1); border-radius:4px;">⚠️ Critical Life: Prepare to restock ashore</div>`;
+                }
+
+                h += `<div class="iou-item" style="padding:8px; border-color:${healthPct <= 15 ? 'var(--danger)' : 'var(--success)'}; flex-direction:column; align-items:stretch; gap:2px;">`;
+                h += `  <div style="display:flex; justify-content:space-between; align-items:flex-start;">`;
+                h += `      <div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">${puffStr} ${mlStr} (Active: ${activeDays}d)</div></div>`;
+                h += `      <div style="display:flex; gap:6px;">
+                                <button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer;">✏️</button>
+                                <button onclick="markVapeDead('${v.id}')" class="iou-btn" style="background:var(--danger); color:#fff; font-size:9px;">KILL</button>
+                            </div>`;
+                h += `  </div>`;
+                h += `  <div class="progress-container" style="height:6px; margin-top:6px; background:var(--panel-border);">`;
+                h += `      <div class="progress-bar" style="width:${healthPct}%; background:${healthColor}; transition: width 0.5s ease-out;"></div>`;
+                h += `  </div>`;
+                h += `  <div style="font-size:9px; color:var(--text-muted); display:flex; justify-content:space-between; margin-top:4px;"><span>Est. Death: ${deathDate}</span><span>${estLifeLeft.toFixed(1)} Days Left</span></div>`;
+                h += warningHtml;
+                h += `</div>`;
             });
         }
         
@@ -5027,15 +5048,35 @@ if(document.getElementById('advVapeBrand')) {
             h += `<div style="margin-top:15px; font-size:10px; font-weight:bold; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">🪦 The Graveyard</div>`;
             h += `<div class="scrollable-list" style="max-height:180px; display:flex; flex-direction:column; gap:6px;">`;
             graveyard.forEach(v => {
-                let daysLived = v.opened_ts && v.killed_ts ? ((v.killed_ts - v.opened_ts)/86400000).toFixed(1) : "?";
+                let daysLivedNum = v.opened_ts && v.killed_ts ? ((v.killed_ts - v.opened_ts)/86400000) : 0;
+                let daysLived = daysLivedNum > 0 ? daysLivedNum.toFixed(1) : "?";
+                
+                // NEW: ROI Cost Per Day Engine
+                let cpdHtml = '';
+                if (daysLivedNum > 0) {
+                    let cpd = modeAvgCost / daysLivedNum;
+                    cpdHtml = `<span style="color:var(--warning); font-weight:bold;">${cpd.toFixed(2)} ${sym}/day</span>`;
+                } else {
+                    cpdHtml = `<span style="color:var(--text-muted);">N/A</span>`;
+                }
+
                 h += `<div class="iou-item" style="padding:8px; border-color:var(--panel-border); opacity:0.6;">`;
-                h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">Lived: ${daysLived} Days</div></div>`;
-                h += `<button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer;">✏️</button></div>`;
+                h += `  <div style="flex:1;">
+                            <strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong>
+                            <div style="font-size:9px; color:var(--text-muted); display:flex; justify-content:space-between; margin-top:4px;">
+                                <span>Lived: ${daysLived} Days</span> 
+                                ${cpdHtml}
+                            </div>
+                        </div>`;
+                h += `  <button onclick="editVape('${v.id}')" style="background:none; border:none; font-size:14px; cursor:pointer; margin-left:10px;">✏️</button>`;
+                h += `</div>`;
             });
+            h += `</div>`;
         }
         
         document.getElementById("vapeStatsHtml").innerHTML = h;
     }
+
 
 
 
