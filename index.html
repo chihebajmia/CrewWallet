@@ -2937,6 +2937,29 @@ function setPaycheckWizardType(type) {
         calculateRunwayDiagnostics();
         document.getElementById('diagnosticsModal').style.display = 'flex';
     }
+
+    function getDynamicVapeBurnRate() {
+        let estD = 0; let pDates = [];
+        ['vacation', 'onboard'].forEach(m => {
+            (s.history[m].archive || []).concat([{logs: s.history[m].current || []}]).forEach(d => {
+                (d.logs || []).forEach(l => {
+                    if (l.category === '💨 Vape' || l.cat === 'vape') {
+                        estD += (parseInt(l.vapeQty) || 1);
+                        pDates.push(new Date(l.dateStr || d.date || Date.now()));
+                    }
+                });
+            });
+        });
+        let cStash = parseInt(s.vape_stash.count) || 0;
+        let cDev = Math.max(0.5, estD - cStash);
+        if (pDates.length > 0) {
+            pDates.sort((a,b) => a-b);
+            let daysSmoke = Math.max(1, (Date.now() - pDates[0].getTime()) / 86400000);
+            return daysSmoke / cDev;
+        }
+        return 4; // Fallback
+    }
+
     
     function calculateRunwayDiagnostics() {
         let isTND = s.mode === 'vacation';
@@ -3347,17 +3370,9 @@ function setPaycheckWizardType(type) {
             });
 
             let currentStash = parseInt(s.vape_stash.count) || 0;
-            let consumedDevices = estDevices - currentStash;
-            if (consumedDevices <= 0) consumedDevices = 0.5;
-
-            let trueVapeBurnRate = 4; // Fallback
-            if (purchaseDates.length > 0) {
-                purchaseDates.sort((a, b) => a.getTime() - b.getTime());
-                let totalDaysSmoking = Math.max(1, (Date.now() - purchaseDates[0].getTime()) / 86400000);
-                trueVapeBurnRate = totalDaysSmoking / consumedDevices;
-            }
-
+            let trueVapeBurnRate = getDynamicVapeBurnRate();
             let projectedVapesNeeded = daysL / trueVapeBurnRate;
+
             let vapesToBuy = Math.max(0, projectedVapesNeeded - currentStash);
             let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (s.mode === 'vacation' ? 35 : 10);
             
@@ -4496,12 +4511,17 @@ if(document.getElementById('advVapeBrand')) {
     if (newName === null) return;
     if (newName.trim() !== '') p.name = newName.trim();
 
-    let newTarget = await openUPrompt("Edit Target Limit", `Current: ${p.target} ${p.currency}\nEnter new limit:`, p.target);
-    if (newTarget === null) return;
-    let nTgt = parseFloat(newTarget);
-    if (!isNaN(nTgt) && nTgt >= 0) {
-        p.target = nTgt;
+    if (type === 'mis' && p.isBlueprint) {
+        await openUConfirm("Blueprint Locked", "This target is automatically calculated by your Blueprint components. To change the target, open the Ledger and add/edit an item.");
+    } else {
+        let newTarget = await openUPrompt("Edit Target Limit", `Current: ${p.target} ${p.currency}\nEnter new limit:`, p.target);
+        if (newTarget === null) return;
+        let nTgt = parseFloat(newTarget);
+        if (!isNaN(nTgt) && nTgt >= 0) {
+            p.target = nTgt;
+        }
     }
+
 
     // --- ADVANCED ANALYTICS UPGRADE: GOAL TYPE & TIMELINE TIMING ---
     if (type === 'goal') {
@@ -4863,8 +4883,9 @@ if(document.getElementById('advVapeBrand')) {
         
         let graveyard = inv.filter(v => v.status === "dead").sort((a,b) => b.killed_ts - a.killed_ts);
         if(graveyard.length > 0) {
-            h += `<div style="margin-top:8px; color:var(--text-muted); font-size:10px; font-weight:bold;">🪦 Graveyard (Last 5)</div>`;
-            graveyard.slice(0, 5).forEach(v => {
+            h += `<div style="margin-top:15px; font-size:10px; font-weight:bold; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">🪦 The Graveyard</div>`;
+            h += `<div class="scrollable-list" style="max-height:180px; display:flex; flex-direction:column; gap:6px;">`;
+            graveyard.forEach(v => {
                 let daysLived = v.opened_ts && v.killed_ts ? ((v.killed_ts - v.opened_ts)/86400000).toFixed(1) : "?";
                 h += `<div class="iou-item" style="padding:8px; border-color:var(--panel-border); opacity:0.6;">`;
                 h += `<div><strong style="color:var(--text);">${v.brand} - ${v.flavor}</strong><div style="font-size:9px; color:var(--text-muted);">Lived: ${daysLived} Days</div></div>`;
@@ -6044,21 +6065,29 @@ async function deleteIncome(index) {
     }
     
     function editPastExpense(i) {
-        tmEditIndex = i; 
+        tmEditIndex = i;
         let item = tmCurrentDayObj.logs[i];
-        
         if (document.getElementById('tmSpecificDate')) document.getElementById('tmSpecificDate').value = tmCurrentDayObj.date;
-        document.getElementById('tmTag').value = item.desc || ''; 
+        document.getElementById('tmTag').value = item.desc || '';
         document.getElementById('tmAmount').value = item.amount || '';
-        document.getElementById('tmCategory').value = item.category || 'Uncategorized'; 
+        document.getElementById('tmCategory').value = item.category || 'Uncategorized';
         document.getElementById('tmLocation').value = item.location || '';
-        document.getElementById('tmProject').value = item.project || 'none'; 
+        document.getElementById('tmProject').value = item.project || 'none';
         document.getElementById('tmSourceWallet').value = item.wallet || 'default';
         document.getElementById('tmActualDeduct').value = item.actualDeduct || '';
         
-        document.getElementById('tmEditBanner').style.display = 'block'; 
+        toggleOnlineFields('tm'); // Force UI to update
+        if (item.blueprintItemId) {
+            setTimeout(() => {
+                let bpBox = document.getElementById('tmBlueprintBox');
+                if (bpBox && bpBox.style.display === 'block') document.getElementById('tmBpItem').value = item.blueprintItemId;
+            }, 50); // Allow DOM to render dropdown before selecting
+        }
+        
+        document.getElementById('tmEditBanner').style.display = 'block';
         document.getElementById('tmFormContainer').style.display = 'block';
     }
+
     
     function cancelTMEdit() { 
         tmEditIndex = -1; 
