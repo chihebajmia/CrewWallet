@@ -223,101 +223,18 @@
             body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; background: white; color: #000; padding: 0; margin: 0; box-sizing: border-box; } 
         }
-                /* =========================================
-           NEO-FINTECH BUG FIXES & OVERRIDES (V3)
+          /* =========================================
+           NEO-FINTECH BUG FIXES (V4 SAFE)
            ========================================= */
+        .balance-card { position: relative !important; }
+        .chart-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; margin: 6px 0; }
+        .chart-bar-bg { flex: 1; background-color: var(--panel-border); height: 6px; border-radius: 3px; margin: 0 8px; overflow: hidden; }
+        .chart-bar-fill { background-color: var(--accent); height: 100%; width: 0%; transition: width 0.6s ease-out; }
+        [style*="background-color:#0f172a"], [style*="background-color: #0f172a"], [style*="background:#0f172a"], [style*="background: #0f172a"], [style*="background:#1e293b"], [style*="background: #1e293b"], .advanced-context-box, #masterCatBreakdown { background: var(--vault-bg) !important; border-color: var(--glass-border) !important; }
+        [style*="color:#f8fafc"], [style*="color: #f8fafc"], [style*="color:#ffffff"], [style*="color: #ffffff"] { color: var(--text) !important; }
+        [style*="border-bottom:1px solid #1e293b"], [style*="border-bottom: 1px solid #1e293b"], [style*="border-color:#1e293b"], [style*="border-color: #1e293b"] { border-color: var(--glass-border) !important; border-bottom-color: var(--glass-border) !important; }
+        #masterCatBreakdown div { color: var(--text) !important; border-color: var(--glass-border) !important; }
 
-        /* 1. Define missing variable for Navigator */
-        :root {
-            --panel-bg: var(--vault-bg);
-        }
-        
-        /* 2. Anchor the Floating Surplus Badge */
-        .balance-card { 
-            position: relative !important; 
-        }
-
-        /* 3. RESTORE ACCIDENTALLY DELETED CHART CLASSES */
-        .chart-row { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            font-size: 11px; 
-            margin: 6px 0; 
-        }
-        .chart-bar-bg { 
-            flex: 1; 
-            background-color: var(--panel-border); 
-            height: 6px; 
-            border-radius: 3px; 
-            margin: 0 8px; 
-            overflow: hidden; 
-        }
-        .chart-bar-fill { 
-            background-color: var(--accent); 
-            height: 100%; 
-            width: 0%; 
-            transition: width 0.6s ease-out; 
-        }
-
-        /* 4. CATCH ALL LEGACY BACKGROUNDS, GRADIENTS & SLATE BUTTONS */
-        [style*="background-color:#0f172a"], 
-        [style*="background-color: #0f172a"], 
-        [style*="background:#0f172a"], 
-        [style*="background: #0f172a"],
-        [style*="background:#1e293b"],
-        [style*="background: #1e293b"],
-        [style*="background:rgba(15, 23, 42"],
-        [style*="background: rgba(15, 23, 42"],
-        [style*="linear-gradient"],
-        .advanced-context-box, 
-        #masterCatBreakdown {
-            background-color: var(--vault-bg) !important;
-            background: var(--vault-bg) !important;
-            border-color: var(--glass-border) !important;
-        }
-
-        /* Fix the Exchange Button Contrast */
-        [style*="background:#334155"] {
-            background-color: var(--text) !important;
-            color: var(--bg-color) !important;
-        }
-
-        /* 5. CATCH ALL LEGACY TEXT COLORS */
-        [style*="color:#f8fafc"], 
-        [style*="color: #f8fafc"],
-        [style*="color:#ffffff"], 
-        [style*="color: #ffffff"] {
-            color: var(--text) !important;
-        }
-        [style*="color:#94a3b8"], 
-        [style*="color: #94a3b8"] {
-            color: var(--text-muted) !important;
-        }
-
-        /* 6. FIX BORDERS AND LAYOUTS */
-        [style*="border-bottom:1px solid #1e293b"], 
-        [style*="border-bottom: 1px solid #1e293b"],
-        [style*="border-color:#1e293b"],
-        [style*="border-color: #1e293b"],
-        [style*="rgba(255,255,255,0.05)"],
-        [style*="rgba(255, 255, 255, 0.05)"] {
-            border-color: var(--glass-border) !important;
-            border-bottom-color: var(--glass-border) !important;
-        }
-        
-        #masterCatBreakdown div {
-            color: var(--text) !important;
-            border-color: var(--glass-border) !important;
-        }
-
-        /* 7. FORCE NAVIGATOR TEXT TO OBEY THEME */
-        #navRecommendation {
-            color: var(--text) !important;
-        }
-        #navRecommendation span {
-            color: var(--text-muted) !important;
-        }
 
 
     </style>
@@ -381,7 +298,7 @@
                         </div>
                     </div>
                     
-                    <div id="dynamicCountdownBox" style="margin-top:10px; background:rgba(15, 23, 42, 0.4); padding:8px; border-radius:8px; border:1px dashed var(--panel-border); text-align:center;">
+                    <div id="dynamicCountdownBox" style="margin-top:10px; background:var(--vault-bg); padding:8px; border-radius:8px; border:1px dashed var(--panel-border); text-align:center;">
                         <div id="cdTitle" style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">
                             Timeline Context
                         </div>
@@ -439,7 +356,7 @@
                     <button class="v-btn" onclick="openTransferModal()">🔄 Transfer</button>
                     <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="openSweepModal()">📈 Sweep</button>
                     <button class="v-btn" style="background:var(--accent); color:#000;" onclick="openATMModal()">🏧 ATM</button>
-                    <button class="v-btn" style="background:#334155; grid-column: span 3;" onclick="vaultExchange()">💱 Exchange Cash (USD↔TND)</button>
+                    <button class="v-btn" style="background:var(--text); color:var(--bg-color); grid-column: span 3;" onclick="vaultExchange()">💱 Exchange Cash (USD↔TND)</button>
                 </div>
                 
                 <button style="background:none; border:none; color:var(--text-muted); font-size:10px; cursor:pointer; width:100%; text-align:center; margin-top:12px; text-decoration:underline;" onclick="document.getElementById('editModal').style.display='flex'; event.stopPropagation();">
@@ -695,7 +612,7 @@
         </div>
         <div id="tab-analytics" class="page-section">
             <!-- THE NAVIGATOR COMMAND CENTER -->
-            <div class="vault-card" style="border-color: #38bdf8; margin-bottom: 10px; background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);">
+            <div class="vault-card" style="border-color: #38bdf8; margin-bottom: 10px;">
                 <div class="title" style="color: #38bdf8; border-bottom: 1px dashed var(--panel-border); padding-bottom: 8px; margin-bottom: 8px;">
                     🧭 The Navigator's Recommendation
                 </div>
@@ -705,7 +622,7 @@
             </div>
 
                         <!-- BEHAVIORAL ENGINES -->
-            <div class="vault-card" style="border-color: #8b5cf6; margin-bottom: 10px; background: linear-gradient(145deg, #1e1b4b 0%, #2e1065 100%);">
+            <div class="vault-card" style="border-color: #8b5cf6; margin-bottom: 10px;">
                 <div class="title" style="color: #a78bfa; border-bottom: 1px dashed var(--panel-border); padding-bottom: 8px; margin-bottom: 8px;">
                     🧠 Behavioral Analytics
                 </div>
@@ -3867,7 +3784,7 @@ if(document.getElementById('advVapeBrand')) {
             // Only flag if spending is significant (>10) and 150% higher than normal
             if (weeklyAvg30 > 10 && cat7[c] > (weeklyAvg30 * 1.5)) { 
                 let increase = Math.round(((cat7[c] - weeklyAvg30) / weeklyAvg30) * 100);
-                trendAlerts += `<div style="background: rgba(234, 179, 8, 0.15); border-left: 3px solid #eab308; padding: 8px; margin-top:8px; border-radius: 4px; color: #e2e8f0; font-size: 11px;">
+                trendAlerts += `<div style="background: rgba(234, 179, 8, 0.15); border-left: 3px solid #eab308; padding: 8px; margin-top:8px; border-radius: 4px; color: var(--text); font-size: 11px;">
                     ⚠️ <strong>Acceleration Alert:</strong> Your <strong>${c}</strong> spend is up ${increase}% this week compared to your 30-day baseline.
                 </div>`;
             }
@@ -3993,7 +3910,7 @@ if(document.getElementById('advVapeBrand')) {
         let html = '<div style="width: 100%; display: flex; flex-direction: column; gap: 12px; text-align: left;">';
         
         if (totalSurplusUSD <= 0) {
-            html += `<div style="background: rgba(234, 179, 8, 0.1); border-left: 3px solid #eab308; padding: 10px; border-radius: 4px; color: #e2e8f0; font-size: 12px; line-height: 1.5;">
+            html += `<div style="background: rgba(234, 179, 8, 0.1); border-left: 3px solid #eab308; padding: 10px; border-radius: 4px; color: var(--text); font-size: 12px; line-height: 1.5;">
                         <strong style="color: #eab308;">🟡 Status Yellow: Hold Position.</strong><br>
                         All current liquidity is locked to secure your ${runwayDays}-Day runway to ${runwayTargetName} and bridge buffers. No tactical surplus available.
                     </div>`;
@@ -4016,7 +3933,7 @@ if(document.getElementById('advVapeBrand')) {
                 ibkrAllocUSD = totalSurplusUSD;
             }
 
-            html += `<div style="background: rgba(34, 197, 94, 0.1); border-left: 3px solid #22c55e; padding: 10px; border-radius: 4px; color: #e2e8f0; font-size: 12px; line-height: 1.5;">
+            html += `<div style="background: rgba(34, 197, 94, 0.1); border-left: 3px solid #22c55e; padding: 10px; border-radius: 4px; color: var(--text); font-size: 12px; line-height: 1.5;">
                         <strong style="color: #22c55e;">🟢 Status Green:</strong> Safe Tactical Surplus of <strong>$${totalSurplusUSD.toFixed(2)}</strong>. Daily runway to ${runwayTargetName} & buffers secured.
                     </div>
                     <div style="background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 6px; padding: 10px;">
