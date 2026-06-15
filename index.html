@@ -1062,6 +1062,39 @@
         </div>
     </div>
 
+        <div class="modal-overlay" id="projectLedgerModal">
+        <div class="modal-content" style="max-width: 380px; padding: 20px;">
+            <div class="title" id="plTitle" style="text-align:center; font-size:14px; color:var(--accent);">Project Name</div>
+            
+            <div class="vault-grid" style="grid-template-columns: 1fr 1fr; margin-top:12px;">
+                <div class="vault-item">
+                    <span class="v-lbl">Target / Est</span>
+                    <span class="v-val" id="plTarget">0.00</span>
+                </div>
+                <div class="vault-item">
+                    <span class="v-lbl">Total Spent</span>
+                    <span class="v-val" id="plSpent" style="color:var(--danger);">0.00</span>
+                </div>
+            </div>
+
+            <div id="plBlueprintSection" style="display:none; margin-top:16px;">
+                <div class="title" style="font-size:10px; margin-bottom:8px;">🏗️ Blueprint Breakdown</div>
+                <div id="plBlueprintList" style="display:flex; flex-direction:column; gap:6px;"></div>
+            </div>
+
+            <div style="margin-top:16px;">
+                <div class="title" style="font-size:10px; margin-bottom:8px;">📖 Chronological Ledger</div>
+                <div id="plHistoryList" class="history-card" style="max-height: 240px; background:var(--vault-bg); border:1px solid var(--glass-border); padding:10px;">
+                    </div>
+            </div>
+
+            <div class="modal-btn-row" style="margin-top:16px;">
+                <button class="btn-secondary" onclick="document.getElementById('projectLedgerModal').style.display='none'">Close</button>
+                <button class="v-btn" style="background:var(--accent); color:#000;" onclick="jumpToLogFromLedger()">➕ Log Expense</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="addProjectModal">
         <div class="modal-content">
             <div class="title" style="text-align:center; font-size:12px; color:var(--accent);">Create New Tracker</div>
@@ -3517,6 +3550,99 @@ function setPaycheckWizardType(type) {
     // ==========================================
     // 8. PROJECTS & DAILY EXPENSE LOGGING
     // ==========================================
+        // ==========================================
+    // GRANULAR PROJECT LEDGER ENGINE
+    // ==========================================
+    let currentLedgerId = null;
+    let currentLedgerType = null;
+
+    function openProjectLedger(id, type) {
+        currentLedgerId = id;
+        currentLedgerType = type;
+        
+        let pObj = type === 'mis' ? s.projects.missions[id] : s.projects.envelopes[id];
+        if (!pObj) return;
+
+        document.getElementById('plTitle').innerText = pObj.name;
+        document.getElementById('plTarget').innerText = parseFloat(pObj.target).toFixed(2);
+        document.getElementById('plSpent').innerText = parseFloat(pObj.spent).toFixed(2);
+
+        // 1. Render Blueprint (If Active)
+        let bpSection = document.getElementById('plBlueprintSection');
+        if (type === 'mis' && pObj.isBlueprint && pObj.blueprint && pObj.blueprint.length > 0) {
+            bpSection.style.display = 'block';
+            let bpHTML = '';
+            pObj.blueprint.forEach(bp => {
+                let pct = bp.est > 0 ? ((bp.spent / bp.est) * 100).toFixed(0) : 0;
+                let color = pct > 100 ? 'var(--danger)' : 'var(--success)';
+                bpHTML += `<div style="display:flex; justify-content:space-between; font-size:11px; padding:8px; background:var(--card-bg); border:1px dashed var(--glass-border); border-radius:8px;">
+                    <span>${bp.name}</span>
+                    <span style="color:${color}; font-weight:bold;">${parseFloat(bp.spent).toFixed(2)} <span style="color:var(--text-muted); font-weight:normal;">/ ${parseFloat(bp.est).toFixed(2)}</span></span>
+                </div>`;
+            });
+            document.getElementById('plBlueprintList').innerHTML = bpHTML;
+        } else {
+            bpSection.style.display = 'none';
+        }
+
+        // 2. Scan Entire Mode History
+        let logs = [];
+        let searchTag = type + '_' + id;
+        
+        // Scan Archive
+        (s.history[s.mode].archive || []).forEach(day => {
+            (day.logs || []).forEach(log => {
+                if (log.project === searchTag) logs.push({ date: day.date, ...log });
+            });
+        });
+        
+        // Scan Today
+        (s.history[s.mode].current || []).forEach(log => {
+            if (log.project === searchTag) {
+                let todayStr = new Date().toISOString().split('T')[0];
+                logs.push({ date: todayStr + ' (Today)', ...log });
+            }
+        });
+
+        logs.sort((a, b) => new Date(b.date.split(' ')[0]) - new Date(a.date.split(' ')[0]));
+
+        // 3. Inject Chronological Receipt
+        let histHTML = '';
+        if (logs.length === 0) {
+            histHTML = `<div style="text-align:center; padding:15px; font-size:11px; color:var(--text-muted);">No expenses logged to this project yet.</div>`;
+        } else {
+            logs.forEach(log => {
+                let bpLabel = '';
+                if (pObj.isBlueprint && log.blueprintItemId) {
+                    let bpObj = pObj.blueprint.find(b => b.id === log.blueprintItemId);
+                    if (bpObj) bpLabel = `<span style="color:var(--accent); font-size:9px; background:rgba(14, 165, 233, 0.1); padding:2px 6px; border-radius:4px; margin-left:6px;">${bpObj.name}</span>`;
+                }
+                
+                histHTML += `<div class="history-item" style="padding:10px 0;">
+                    <div>
+                        <div style="font-weight:bold; font-size:12px; color:var(--text);">${log.desc} ${bpLabel}</div>
+                        <div class="history-details">${log.date} • ${log.location || 'Unknown'}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-weight:bold; color:var(--danger); font-size:13px;">-${parseFloat(log.amount).toFixed(2)}</div>
+                        <div style="font-size:9px; color:var(--text-muted); margin-top:2px;">${log.wallet === 'default' ? 'Cash' : log.wallet}</div>
+                    </div>
+                </div>`;
+            });
+        }
+        document.getElementById('plHistoryList').innerHTML = histHTML;
+        document.getElementById('projectLedgerModal').style.display = 'flex';
+    }
+
+    function jumpToLogFromLedger() {
+        document.getElementById('projectLedgerModal').style.display = 'none';
+        switchTab('dash');
+        document.getElementById('advProject').value = currentLedgerType + '_' + currentLedgerId;
+        toggleOnlineFields('adv'); // Triggers Blueprint dropdown automatically!
+        document.getElementById('advAmount').focus();
+    }
+
+    
     let tempBlueprintItems = [];
 
     function toggleProjectFields() {
@@ -4170,8 +4296,8 @@ if(document.getElementById('advVapeBrand')) {
     function renderProjects() {
         let archHtml = '';
 
-        // Helper for Envelopes & Missions
-                let generateHTML = (obj, prefix) => {
+               // Helper for Envelopes & Missions
+        let generateHTML = (obj, prefix) => {
             let actHtml = '';
             Object.keys(obj || {}).forEach(k => {
                 let p = obj[k];
@@ -4186,16 +4312,18 @@ if(document.getElementById('advVapeBrand')) {
 
                 h += `<div style="display:flex; gap:8px;">`;
                 if (!p.archived) {
+                    h += `<button onclick="openProjectLedger('${k}', '${prefix}')" style="background:none; border:none; font-size:10px; color:var(--accent); font-weight:bold; cursor:pointer;">📖 Ledger</button>`;
                     h += `<button onclick="editProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--success); cursor:pointer;">Edit</button>`;
                     h += `<button onclick="archiveProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--warning); cursor:pointer;">Archive</button>`;
                 } else {
+                    h += `<button onclick="openProjectLedger('${k}', '${prefix}')" style="background:none; border:none; font-size:10px; color:var(--accent); font-weight:bold; cursor:pointer;">📖 Ledger</button>`;
                     h += `<button onclick="deleteProject('${prefix}', '${k}')" style="background:none; border:none; font-size:10px; color:var(--danger); cursor:pointer;">Delete</button>`;
                 }
                 h += `</div></div>`;
 
                 // SMART RENDER: Check if it's an open mission (target = 0)
                 if (tgt === 0) {
-                    h += `<div style="font-size:10px; margin-top:8px; color:var(--text-muted);">Total Spent: <span style="color:#f8fafc; font-weight:bold;">${spt.toFixed(2)} ${p.currency}</span> <span style="color:#38bdf8;">(Open)</span></div></div>`;
+                    h += `<div style="font-size:10px; margin-top:8px; color:var(--text-muted);">Total Spent: <span style="color:var(--text); font-weight:bold;">${spt.toFixed(2)} ${p.currency}</span> <span style="color:var(--accent);">(Open)</span></div></div>`;
                 } else {
                     h += `<div class="progress-container" style="height:4px; margin-top:4px;">`;
                     h += `<div class="progress-bar" style="width:${pct}%; background:${pct >= 100 ? 'var(--danger)' : 'var(--accent)'};"></div></div>`;
@@ -4207,6 +4335,7 @@ if(document.getElementById('advVapeBrand')) {
             });
             return actHtml;
         };
+
 
 
         document.getElementById('envelopeContainer').innerHTML = generateHTML(s.projects.envelopes, 'env') || '<div style="font-size:11px; color:var(--text-muted);">No active envelopes.</div>';
