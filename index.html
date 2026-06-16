@@ -362,10 +362,9 @@
                     <button class="v-btn" style="background:#16a34a;" onclick="openPaycheckModal()">💵 Paycheck</button>
                     <button class="v-btn" onclick="openIncomeModal()">📥 Deposit</button>
                     <button class="v-btn" style="background:#ca8a04;" onclick="vaultWise()">🦉 Wise</button>
-                    <button class="v-btn" onclick="openTransferModal()">🔄 Transfer</button>
+                    <button class="v-btn" onclick="openTransferModal()">🔄 Transfer / Exchange</button>
                     <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="openSweepModal()">📈 Sweep</button>
                     <button class="v-btn" style="background:var(--accent); color:#000;" onclick="openATMModal()">🏧 ATM</button>
-                    <button class="v-btn" style="background:var(--text); color:var(--bg-color); grid-column: span 3;" onclick="vaultExchange()">💱 Exchange Cash (USD↔TND)</button>
                 </div>
                 
                 <button style="background:none; border:none; color:var(--text-muted); font-size:10px; cursor:pointer; width:100%; text-align:center; margin-top:12px; text-decoration:underline;" onclick="document.getElementById('editModal').style.display='flex'; event.stopPropagation();">
@@ -944,6 +943,11 @@
                     📥 Other Funding & Deposits
                 </div>
                 <div id="otherIncomeList" style="margin-top:5px; max-height:150px; overflow-y:auto; padding-right:4px;"></div>
+                                <div style="font-size:11px; font-weight:bold; color:#a855f7; padding-bottom:4px; border-bottom:1px dashed var(--panel-border); margin-top:15px;">
+                    🔄 Transfer & Exchange Ledger
+                </div>
+                <div id="transferLedgerList" style="margin-top:5px; margin-bottom:15px; max-height:180px; overflow-y:auto; padding-right:4px;"></div>
+
             </div>
 
 
@@ -1227,12 +1231,12 @@
 
     <div class="modal-overlay" id="transferModal">
         <div class="modal-content">
-            <div class="title" style="text-align:center; font-size:12px; color:#38bdf8;">🔄 Internal Transfer</div>
-            <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Move funds between your vaults safely.</div>
+            <div class="title" style="text-align:center; font-size:12px; color:#38bdf8;">🔄 Unified Transfer & Exchange</div>
+            <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:15px;">Move funds between vaults or execute cross-currency exchanges.</div>
             
-            <input type="number" id="trfAmount" placeholder="Amount to move" inputmode="decimal" style="width:100%;">
+            <input type="number" id="trfAmount" placeholder="Principal Amount to Deduct" inputmode="decimal" style="width:100%;">
             
-            <select id="trfFrom" style="margin-top:10px; width:100%;">
+            <select id="trfFrom" style="margin-top:10px; width:100%;" onchange="toggleTransferFields()">
                 <option value="cash_tnd">From: Cash (TND)</option>
                 <option value="savings">From: Savings (TND)</option>
                 <option value="cash_usd">From: Cash (USD)</option>
@@ -1241,7 +1245,7 @@
                 <option value="ibkr_cash">From: IBKR Idle (USD)</option>
             </select>
             
-            <select id="trfTo" style="margin-top:10px; width:100%;">
+            <select id="trfTo" style="margin-top:10px; width:100%;" onchange="toggleTransferFields()">
                 <option value="savings">To: Savings (TND)</option>
                 <option value="cash_tnd">To: Cash (TND)</option>
                 <option value="cash_usd">To: Cash (USD)</option>
@@ -1249,9 +1253,25 @@
                 <option value="wise">To: Wise (USD)</option>
                 <option value="ibkr_cash">To: IBKR Idle (USD)</option>
             </select>
-            
-            <div style="font-size:9px; color:var(--warning); margin-top:10px; text-align:center; background:rgba(250, 204, 21, 0.1); padding:8px; border-radius:8px;">
-                If moving between TND and USD, the live FX rate will be applied.
+
+            <div id="trfAdvancedBox" style="display:none; flex-direction:column; gap:10px; margin-top:15px; padding:12px; background:var(--vault-bg); border-radius:8px; border:1px dashed var(--warning);">
+                <div style="font-size:10px; font-weight:bold; color:var(--warning); text-transform:uppercase; text-align:center;">💱 Currency Exchange Detected</div>
+                
+                <div>
+                    <label style="font-size:9px; color:var(--text-muted); font-weight:bold;">EXACT AMOUNT RECEIVED (TARGET CURRENCY)</label>
+                    <input type="number" id="trfReceived" placeholder="e.g., 572.00" inputmode="decimal" style="border-color:var(--success);">
+                </div>
+                
+                <div>
+                    <label style="font-size:9px; color:var(--text-muted); font-weight:bold;">WIRE / TRANSFER FEE (DEDUCTED FROM SOURCE)</label>
+                    <input type="number" id="trfFee" placeholder="e.g., 15.00 (Leave 0 if none)" inputmode="decimal" style="border-color:var(--danger);">
+                    <div style="font-size:8px; color:var(--text-muted); margin-top:4px;">*Fees will be logged as a separate Time Machine expense.</div>
+                </div>
+
+                <div>
+                    <label style="font-size:9px; color:var(--text-muted); font-weight:bold;">INSTITUTION / BUREAU NAME</label>
+                    <input type="text" id="trfInstitution" placeholder="e.g., Western Union, Tunis Airport">
+                </div>
             </div>
             
             <div class="modal-btn-row">
@@ -1260,6 +1280,7 @@
             </div>
         </div>
     </div>
+
 
     <div class="modal-overlay" id="paycheckModal">
         <div class="modal-content">
@@ -2336,6 +2357,7 @@
             loadPastDay(); 
             renderContractTracker();
             renderIncomeLogs(); 
+            if(typeof renderTransferLedger === 'function') renderTransferLedger();
             document.getElementById('tmSearch').value = ''; 
             searchLogs(); 
         }
@@ -6174,34 +6196,166 @@ async function deleteIncome(index) {
 }
 
 
+    function toggleTransferFields() {
+        let f = document.getElementById('trfFrom').value;
+        let t = document.getElementById('trfTo').value;
+        let isF_USD = (f === 'cash_usd' || f === 'brightwell' || f === 'wise' || f === 'ibkr_cash');
+        let isT_USD = (t === 'cash_usd' || t === 'brightwell' || t === 'wise' || t === 'ibkr_cash');
+
+        if (isF_USD !== isT_USD) {
+            document.getElementById('trfAdvancedBox').style.display = 'flex';
+        } else {
+            document.getElementById('trfAdvancedBox').style.display = 'none';
+            document.getElementById('trfReceived').value = '';
+            document.getElementById('trfFee').value = '';
+            document.getElementById('trfInstitution').value = '';
+        }
+    }
+
     function openTransferModal() { 
         document.getElementById('trfAmount').value = ''; 
+        document.getElementById('trfFrom').selectedIndex = 0;
+        document.getElementById('trfTo').selectedIndex = 1;
+        document.getElementById('trfReceived').value = '';
+        document.getElementById('trfFee').value = '';
+        document.getElementById('trfInstitution').value = '';
+        toggleTransferFields();
         document.getElementById('transferModal').style.display = 'flex'; 
     }
     
     function processTransfer() {
-        let a = parseFloat(document.getElementById('trfAmount').value); 
+        let principal = parseFloat(document.getElementById('trfAmount').value); 
         let f = document.getElementById('trfFrom').value; 
         let t = document.getElementById('trfTo').value;
         let fx = parseFloat(s.fx_rate) || 2.923;
         
-        if (isNaN(a) || a <= 0 || f === t) return;
+        if (isNaN(principal) || principal <= 0 || f === t) return alert("Invalid amount or same wallet selected.");
         
         let isF_USD = (f === 'cash_usd' || f === 'brightwell' || f === 'wise' || f === 'ibkr_cash'); 
         let isT_USD = (t === 'cash_usd' || t === 'brightwell' || t === 'wise' || t === 'ibkr_cash');
+        let isMismatch = (isF_USD !== isT_USD);
         
-        if ((parseFloat(s.vault[f]) || 0) < a) return alert("Insufficient funds in source wallet.");
+        let received = principal;
+        let fee = 0;
+        let inst = "";
+        let trueRate = 0;
+        let spreadLoss = 0;
+
+        if (isMismatch) {
+            received = parseFloat(document.getElementById('trfReceived').value);
+            fee = parseFloat(document.getElementById('trfFee').value) || 0;
+            inst = document.getElementById('trfInstitution').value.trim() || "Unknown Bureau";
+            
+            if (isNaN(received) || received <= 0) return alert("Please enter the exact amount received.");
+            
+            // Bank-grade math: Calculate rate strictly from principal, ignoring the fee
+            trueRate = isF_USD ? (received / principal) : (principal / received);
+            
+            // Spread loss calculation against Global FX
+            if (isF_USD) {
+                let expectedTND = principal * fx;
+                spreadLoss = expectedTND - received;
+            } else {
+                let expectedUSD = principal / fx;
+                spreadLoss = expectedUSD - received; 
+            }
+        }
+
+        let totalDeduct = principal + fee;
+        if ((parseFloat(s.vault[f]) || 0) < totalDeduct) return alert("Insufficient funds in source wallet to cover Principal + Fee.");
         
-        let rA = a; 
-        if (isF_USD && !isT_USD) rA = a * fx; 
-        else if (!isF_USD && isT_USD) rA = a / fx;
+        // Execute Core Vault Moves
+        s.vault[f] = (parseFloat(s.vault[f]) || 0) - principal; 
+        s.vault[t] = (parseFloat(s.vault[t]) || 0) + received;
         
-        s.vault[f] = (parseFloat(s.vault[f]) || 0) - a; 
-        s.vault[t] = (parseFloat(s.vault[t]) || 0) + rA;
+        // Generate Dedicated Ledger Receipt
+        if (!s.history.transfers) s.history.transfers = [];
+        let transferId = 'trx_' + Date.now();
+        s.history.transfers.unshift({
+            id: transferId,
+            date: new Date().toLocaleDateString('en-CA'),
+            from: f,
+            to: t,
+            principal: principal,
+            received: received,
+            fee: fee,
+            institution: inst,
+            trueRate: isMismatch ? trueRate : fx,
+            spreadLoss: isMismatch ? spreadLoss : 0,
+            isMismatch: isMismatch
+        });
+
+        // Automatically extract the Fee into the Time Machine
+        if (fee > 0) {
+            s.vault[f] = (parseFloat(s.vault[f]) || 0) - fee;
+            let feeLog = {
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                desc: `💸 Transfer Fee: ${inst}`,
+                amount: fee,
+                category: "🏦 Financial & Fees",
+                project: "none",
+                bypassLimit: true,
+                spillover: 0,
+                shipping: 0,
+                tax: 0,
+                bankFx: null,
+                wallet: f,
+                actualDeduct: fee,
+                location: inst,
+                geoTag: s.mode === 'onboard' ? '🌊 Sea Day' : null,
+                items: "Wire Fee",
+                whom: "",
+                dateStr: new Date().toISOString(),
+                linkedTransferId: transferId
+            };
+            s.history[s.mode].current.unshift(feeLog);
+        }
         
         saveState(); 
         document.getElementById('transferModal').style.display = 'none';
+        if (document.getElementById('tab-time').classList.contains('active')) renderTransferLedger();
     }
+
+    function renderTransferLedger() {
+        let html = '';
+        if (!s.history.transfers) s.history.transfers = [];
+        
+        s.history.transfers.forEach((trx, i) => {
+            let fNice = trx.from.replace('_', ' ').toUpperCase();
+            let tNice = trx.to.replace('_', ' ').toUpperCase();
+            let amtDisplay = trx.isMismatch ? `${trx.principal.toFixed(2)} ➔ ${trx.received.toFixed(2)}` : `${trx.principal.toFixed(2)}`;
+            
+            let details = trx.isMismatch ? `${trx.institution} | Rate: ${trx.trueRate.toFixed(3)} | Spread: -${trx.spreadLoss.toFixed(2)}` : 'Internal Wallet Move';
+            if (trx.fee > 0) details += ` | Fee: $${trx.fee.toFixed(2)}`;
+
+            html += `<div class="history-item">
+                        <div style="flex:1;">
+                            <strong>${fNice} ➔ ${tNice}</strong>
+                            <div class="history-details">${trx.date} | ${details}</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="color:#a855f7; font-weight:bold;">${amtDisplay}</span>
+                            <button class="edit-btn" onclick="deleteTransfer(${i})">🗑️</button>
+                        </div>
+                     </div>`;
+        });
+        let container = document.getElementById('transferLedgerList');
+        if(container) container.innerHTML = html || '<div style="font-size:11px; color:var(--text-muted); text-align:center;">No transfers logged.</div>';
+    }
+
+    async function deleteTransfer(index) {
+        let trx = s.history.transfers[index];
+        let c = await openUConfirm("Dual Reversal Protocol", `Reverse this transfer? \n\nPrincipal (${trx.principal.toFixed(2)}) will return to Source, and Received (${trx.received.toFixed(2)}) will be deducted from Target.\n\nNote: If a wire fee was paid, its receipt remains in your Time Machine.`);
+        if (!c) return;
+
+        s.vault[trx.from] = (parseFloat(s.vault[trx.from]) || 0) + trx.principal;
+        s.vault[trx.to] = Math.max(0, (parseFloat(s.vault[trx.to]) || 0) - trx.received);
+        
+        s.history.transfers.splice(index, 1);
+        saveState();
+        renderTransferLedger();
+    }
+
 
     function openATMModal() { 
         document.getElementById('atmAmt').value = ''; 
@@ -6958,27 +7112,6 @@ async function deleteIncome(index) {
         } else if (c === '2') { 
             s.vault.wise = (parseFloat(s.vault.wise) || 0) - a; 
             s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) + a; 
-        }
-        saveState();
-    }
-
-    
-    function vaultExchange() {
-        let amtStr = prompt("Exchange Amount:\nHow much PHYSICAL CASH are you handing over?");
-        if (!amtStr) return; 
-        
-        let amt = parseFloat(amtStr); 
-        if (isNaN(amt) || amt <= 0) return;
-        
-        let dir = prompt("Direction:\n1: USD to TND\n2: TND to USD");
-        let fx = parseFloat(s.fx_rate) || 2.923;
-        
-        if (dir === '1') { 
-            s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) - amt; 
-            s.vault.cash_tnd = (parseFloat(s.vault.cash_tnd) || 0) + (amt * fx); 
-        } else if (dir === '2') { 
-            s.vault.cash_tnd = (parseFloat(s.vault.cash_tnd) || 0) - amt; 
-            s.vault.cash_usd = (parseFloat(s.vault.cash_usd) || 0) + (amt / fx); 
         }
         saveState();
     }
