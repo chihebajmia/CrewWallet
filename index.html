@@ -503,6 +503,12 @@
 
                     
                     <select id="advCategory" onchange="handleCategoryChange('advCategory')"></select>
+                    <select id="advGeoTag" style="display:none; margin-top:8px; border-color:var(--accent); background:rgba(14, 165, 233, 0.05);">
+                        <option value="🌊 Sea Day">🌊 Sea Day</option>
+                        <option value="🚢 Port (Stayed Onboard)">🚢 Port (Stayed Onboard)</option>
+                        <option value="🌴 Port (Went Ashore)">🌴 Port (Went Ashore)</option>
+                    </select>
+
                     
                    <div id="advVapeQtyBox" style="display:none; flex-direction:column; gap:8px; margin-top:8px; padding:10px; border:1px dashed #a855f7; border-radius:8px; background:rgba(168, 85, 247, 0.1);">
     <div style="font-size:10px; color:#a855f7; font-weight:bold;">💨 Vape Asset Details</div>
@@ -720,6 +726,8 @@
                         <span style="font-size:10px; color:var(--text-muted);">True Average (Incl. Projects & Vapes):</span>
                         <strong style="font-size:13px; color:var(--danger);" id="uiTrueAvgSpend">0.00 TND</strong>
                     </div>
+                        <div id="geoAnalyticsBox" style="display:none; margin-top:10px; flex-direction:column; gap:2px; border-top:1px dashed rgba(56, 189, 248, 0.3); padding-top:10px;"></div>
+
                 </div>
 
             </div>
@@ -854,6 +862,12 @@
 
 
                             <select id="tmCategory" onchange="handleCategoryChange('tmCategory')"></select>
+                            <select id="tmGeoTag" style="display:none; margin-top:8px; border-color:var(--accent); background:rgba(14, 165, 233, 0.05);">
+                                <option value="🌊 Sea Day">🌊 Sea Day</option>
+                                <option value="🚢 Port (Stayed Onboard)">🚢 Port (Stayed Onboard)</option>
+                                <option value="🌴 Port (Went Ashore)">🌴 Port (Went Ashore)</option>
+                            </select>
+
                             
                             <div id="tmVapeQtyBox" style="display:none; flex-direction:column; gap:8px; margin-top:8px; padding:10px; border:1px dashed #a855f7; border-radius:8px; background:rgba(168, 85, 247, 0.1);">
     <div style="font-size:10px; color:#a855f7; font-weight:bold;">💨 Vape Asset Details</div>
@@ -2804,6 +2818,66 @@ function setPaycheckWizardType(type) {
         if (trueAvgEl) {
             trueAvgEl.innerText = trueAvgSpend.toFixed(2) + sym;
         }
+        let geoBox = document.getElementById('geoAnalyticsBox');
+        if (geoBox && s.mode === 'onboard') {
+            let geoStats = {
+                "🌊 Sea Day": { spent: 0, days: 0 },
+                "🚢 Port (Stayed Onboard)": { spent: 0, days: 0 },
+                "🌴 Port (Went Ashore)": { spent: 0, days: 0 }
+            };
+
+            let onboardArch = s.history.onboard.archive || [];
+            let allDays = [...onboardArch];
+            if (s.history.onboard.current && s.history.onboard.current.length > 0) {
+                allDays.push({ logs: s.history.onboard.current });
+            }
+
+            allDays.forEach(day => {
+                let dayGeo = null;
+                let dayTotal = 0;
+                (day.logs || []).forEach(item => {
+                    let amt = parseFloat(item.amount) || 0;
+                    if (item.category !== "🏦 Financial & Fees") {
+                        dayTotal += amt;
+                    }
+                    if (item.geoTag) {
+                        // Priority escalation: Ashore > Onboard Port > Sea Day
+                        if (item.geoTag === "🌴 Port (Went Ashore)") dayGeo = "🌴 Port (Went Ashore)";
+                        else if (item.geoTag === "🚢 Port (Stayed Onboard)" && dayGeo !== "🌴 Port (Went Ashore)") dayGeo = "🚢 Port (Stayed Onboard)";
+                        else if (!dayGeo) dayGeo = item.geoTag;
+                    }
+                });
+                
+                if (dayGeo && geoStats[dayGeo]) {
+                    geoStats[dayGeo].spent += dayTotal;
+                    geoStats[dayGeo].days++;
+                }
+            });
+
+            let avgSea = geoStats["🌊 Sea Day"].days > 0 ? (geoStats["🌊 Sea Day"].spent / geoStats["🌊 Sea Day"].days) : 0;
+            let avgPortOn = geoStats["🚢 Port (Stayed Onboard)"].days > 0 ? (geoStats["🚢 Port (Stayed Onboard)"].spent / geoStats["🚢 Port (Stayed Onboard)"].days) : 0;
+            let avgPortOff = geoStats["🌴 Port (Went Ashore)"].days > 0 ? (geoStats["🌴 Port (Went Ashore)"].spent / geoStats["🌴 Port (Went Ashore)"].days) : 0;
+
+            geoBox.innerHTML = `
+                <div style="font-size:10px; font-weight:bold; color:#38bdf8; margin-bottom:4px; text-transform:uppercase;">📍 Geospatial Burn Rates</div>
+                <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px;">
+                    <span style="color:var(--text-muted);">🌊 Sea Days (${geoStats["🌊 Sea Day"].days}):</span>
+                    <strong style="color:var(--text);">${avgSea.toFixed(2)} USD</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px;">
+                    <span style="color:var(--text-muted);">🚢 Port (Onboard) (${geoStats["🚢 Port (Stayed Onboard)"].days}):</span>
+                    <strong style="color:var(--text);">${avgPortOn.toFixed(2)} USD</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:11px;">
+                    <span style="color:var(--text-muted);">🌴 Port (Ashore) (${geoStats["🌴 Port (Went Ashore)"].days}):</span>
+                    <strong style="color:var(--danger);">${avgPortOff.toFixed(2)} USD</strong>
+                </div>
+            `;
+            geoBox.style.display = 'flex';
+        } else if (geoBox) {
+            geoBox.style.display = 'none';
+        }
+
     }
 
     function openOverDaysModal() {
@@ -3407,6 +3481,11 @@ function setPaycheckWizardType(type) {
     
     function renderDashboard() {
         let fx = parseFloat(s.fx_rate) || 2.923;
+        if (document.getElementById('advGeoTag')) {
+            document.getElementById('advGeoTag').style.display = s.mode === 'onboard' ? 'block' : 'none';
+            document.getElementById('tmGeoTag').style.display = s.mode === 'onboard' ? 'block' : 'none';
+        }
+
         // Run Predictive Radar
         if (document.getElementById('radarContent')) runPredictiveRadar();
         renderDeploymentRadar();
@@ -4198,24 +4277,26 @@ function setPaycheckWizardType(type) {
         if (targetWallet === 'wise') s.vault.wise = (parseFloat(s.vault.wise) || 0) - dAmt;
         if (targetWallet === 'savings') s.vault.savings = (parseFloat(s.vault.savings) || 0) - dAmt;
 
-        s.history[s.mode].current.unshift({ 
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-            desc: desc, 
-            amount: baseAmt, 
-            category: cat, 
-            project: proj, 
-            bypassLimit: bypass, 
-            spillover: spillover, 
-            shipping: ship, 
-            tax: tax, 
+        s.history[s.mode].current.unshift({
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            desc: desc,
+            amount: baseAmt,
+            category: cat,
+            project: proj,
+            bypassLimit: bypass,
+            spillover: spillover,
+            shipping: ship,
+            tax: tax,
             bankFx: bankFx,
             wallet: targetWallet, // Saves the actual wallet so refunds work later!
-            actualDeduct: actualDeduct, 
-            location: loc, 
-            items: items, 
-            whom: whom, 
-            dateStr: new Date().toISOString() 
+            actualDeduct: actualDeduct,
+            location: loc,
+            geoTag: s.mode === 'onboard' ? document.getElementById('advGeoTag').value : null,
+            items: items,
+            whom: whom,
+            dateStr: new Date().toISOString()
         });
+
         
         // Reset Form UI
         document.getElementById('customDescription').value = ''; 
@@ -6259,6 +6340,7 @@ async function deleteIncome(index) {
         document.getElementById('tmCategory').value = item.category || 'Uncategorized';
         document.getElementById('tmLocation').value = item.location || '';
         document.getElementById('tmProject').value = item.project || 'none';
+        if (item.geoTag && document.getElementById('tmGeoTag')) document.getElementById('tmGeoTag').value = item.geoTag;
         document.getElementById('tmSourceWallet').value = item.wallet || 'default';
         document.getElementById('tmActualDeduct').value = item.actualDeduct || '';
         
@@ -6339,10 +6421,12 @@ async function deleteIncome(index) {
             tax: tax,
             bankFx: bankFx,
             location: document.getElementById('tmLocation').value,
+            geoTag: s.mode === 'onboard' ? document.getElementById('tmGeoTag').value : null,
             bypassLimit: bypass,
             spillover: oldItem ? oldItem.spillover : 0,
-            isSnsCharge: oldItem ? oldItem.isSnsCharge : false // PRESERVE S&S TAG
+            isSnsCharge: oldItem ? oldItem.isSnsCharge : false // PRESERVE S&S
         };
+
 
         let fx = parseFloat(s.fx_rate) || 2.923;
 
