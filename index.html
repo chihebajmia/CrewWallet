@@ -3581,8 +3581,11 @@ function setPaycheckWizardType(type) {
     }
 
     
-    function renderDashboard() {
+        function renderDashboard() {
         let fx = parseFloat(s.fx_rate) || 2.923;
+        let isTND = s.mode === 'vacation';
+        let sym = isTND ? ' TND' : ' USD';
+        
         if (document.getElementById('advGeoTag')) {
             document.getElementById('advGeoTag').style.display = s.mode === 'onboard' ? 'block' : 'none';
             document.getElementById('tmGeoTag').style.display = s.mode === 'onboard' ? 'block' : 'none';
@@ -3590,8 +3593,7 @@ function setPaycheckWizardType(type) {
 
         // Run Predictive Radar
         if (document.getElementById('radarContent')) runPredictiveRadar();
-        renderDeploymentRadar();
-
+        if (typeof renderDeploymentRadar === 'function') renderDeploymentRadar();
         
         // --- 1. Top Vault Grid (IBKR & Static Balances) ---
         let ibkrTot = parseFloat(s.vault.ibkr) || 0;
@@ -3622,7 +3624,6 @@ function setPaycheckWizardType(type) {
         document.getElementById('totTND').innerText = totT.toFixed(2) + " TND";
 
         // --- 3. Daily Allowance Bar ---
-        let sym = s.mode === 'vacation' ? ' TND' : ' USD';
         let limit = parseFloat(s.history[s.mode].limit) || 0;
         let currentBal = parseFloat(s.history[s.mode].balance) || 0;
         let pct = limit > 0 ? Math.max(0, Math.min(100, (currentBal / limit) * 100)) : 0;
@@ -3640,93 +3641,18 @@ function setPaycheckWizardType(type) {
         
         document.getElementById('surplusBadge').innerText = (currentBal >= 0 ? '+' : '') + currentBal.toFixed(2);
         
-        // --- 4. Runway Card Summaries ---
-        let activeEnvTND = 0; 
-        Object.values(s.projects.envelopes || {}).filter(e => !e.archived).forEach(e => { 
-            let b = (parseFloat(e.target) || 0) - (parseFloat(e.spent) || 0); 
-            if (b > 0) activeEnvTND += (e.currency === 'USD' ? b * fx : b); 
-        });
-        
-        let vapeTND = 0; 
-        let nowTs = Date.now();
-        let daysL = 1;
-        if (s.mode === 'vacation') {
-            let cEnd = new Date(s.settings.contractStart).getTime();
-            daysL = Math.max(1, Math.ceil((cEnd - nowTs) / 86400000));
-        } else {
-            let seed = new Date('2026-08-21T00:00:00Z').getTime();
-            if (nowTs < seed) {
-                daysL = Math.max(1, Math.ceil((seed - nowTs) / 86400000));
-            } else {
-                let msSince = nowTs - seed;
-                let cycles = Math.floor(msSince / (14 * 86400000));
-                let nextPayday = seed + ((cycles + 1) * 14 * 86400000);
-                daysL = Math.max(1, Math.ceil((nextPayday - nowTs) / 86400000));
-            }
-        }
-        
-        if (daysL > 0) {
-            let estDevices = 0; let modeVapeSpend = 0; let modeVapeDevices = 0; let purchaseDates = [];
-            ['vacation', 'onboard'].forEach(m => {
-                let isCurrentMode = (m === s.mode);
-                (s.history[m].archive || []).forEach(day => {
-                    (day.logs || []).forEach(log => {
-                        if (log.category === '💨 Vape' || log.cat === 'vape') {
-                            let amt = parseFloat(log.amount) || 0; let qty = parseInt(log.vapeQty) || 1;
-                            estDevices += qty;
-                            if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
-                            if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
-                            else if (day.date) purchaseDates.push(new Date(day.date));
-                        }
-                    });
-                });
-                (s.history[m].current || []).forEach(log => {
-                    if (log.category === '💨 Vape' || log.cat === 'vape') {
-                        let amt = parseFloat(log.amount) || 0; let qty = parseInt(log.vapeQty) || 1;
-                        estDevices += qty;
-                        if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
-                        if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
-                        else purchaseDates.push(new Date());
-                    }
-                });
-            });
-
-            let currentStash = parseInt(s.vape_stash.count) || 0;
-            let trueVapeBurnRate = getDynamicVapeBurnRate();
-            let projectedVapesNeeded = daysL / trueVapeBurnRate;
-
-            let vapesToBuy = Math.max(0, projectedVapesNeeded - currentStash);
-            let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (s.mode === 'vacation' ? 35 : 10);
-            
-            let projectedVapeSpend = vapesToBuy * modeAvgCost;
-            vapeTND = s.mode === 'vacation' ? projectedVapeSpend : (projectedVapeSpend * fx);
-        }
-
-        let lockedBufTND = 0; 
-        (s.projects.goals || []).filter(g => g.lockedFromRunway).forEach(g => { 
-            let svd = parseFloat(g.saved) || 0; 
-            lockedBufTND += (g.currency === 'USD' ? svd * fx : svd); 
-        });
+        // --- 4. Runway Card Summaries (Powered by Universal Brains) ---
+        let earmarks = getGlobalEarmarks(fx);
+        let vapeData = getVapeLiability(isTND, fx);
+        let totalLiabilitiesTND = earmarks.totalTND + vapeData.vapeTND;
+        let liquidity = getDeployableLiquidity(totalLiabilitiesTND, isTND, fx);
 
         let uiRnw = 0, uiNet = 0;
         if (limit > 0) {
-            if (s.mode === 'vacation') {
-                uiRnw = totT / limit;
-                uiNet = (totT - activeEnvTND - vapeTND - lockedBufTND) / limit;
-            } else {
-                // ONBOARD MODE FIREWALL: Only USD Liquidity vs ALL Liabilities
-                let liqUSD = (parseFloat(s.vault.cash_usd) || 0) + 
-                             (parseFloat(s.vault.brightwell) || 0) + 
-                             (parseFloat(s.vault.wise) || 0);
-                
-                let totalEarmarksUSD = (activeEnvTND + vapeTND + lockedBufTND) / fx;
-                
-                uiRnw = liqUSD / limit;
-                uiNet = (liqUSD - totalEarmarksUSD) / limit;
-            }
+            uiRnw = liquidity.grossDisp / limit;
+            uiNet = Math.max(0, liquidity.coreDisp) / limit;
         }
 
-        
         document.getElementById('uiRunway').innerText = uiRnw.toFixed(1) + " Days";
         document.getElementById('uiRunwayBudget').innerText = `(@ ${limit.toFixed(2)}${sym}/day)`;
         document.getElementById('uiNetRunway').innerText = `Net (Excl. Earmarks): ${uiNet.toFixed(1)} Days`;
@@ -3734,8 +3660,8 @@ function setPaycheckWizardType(type) {
         // Capital Saved
         let capTND = parseFloat(s.capital_saved_tnd) || 0; 
         let capUSD = capTND / fx;
-        document.getElementById('uiCapitalSavedLbl').innerText = `Total Capital Saved (Based in ${s.mode === 'vacation' ? 'TND' : 'USD'})`;
-        document.getElementById('uiCapitalSaved').innerText = s.mode === 'vacation' ? `${capTND.toFixed(2)} TND` : `$${capUSD.toFixed(2)}`;
+        document.getElementById('uiCapitalSavedLbl').innerText = `Total Capital Saved (Based in ${isTND ? 'TND' : 'USD'})`;
+        document.getElementById('uiCapitalSaved').innerText = isTND ? `${capTND.toFixed(2)} TND` : `$${capUSD.toFixed(2)}`;
 
         // --- 5. Today's Activity Log ---
         let html = ''; 
@@ -3759,13 +3685,12 @@ function setPaycheckWizardType(type) {
         document.getElementById('spilloverAlert').style.display = hasSpillover ? 'block' : 'none';
         
         updateDynamicCountdown();
-                /* --- RENDER SAIL & SIGN MODULE CONTROLS --- */
+        
+        // --- 6. RENDER SAIL & SIGN MODULE CONTROLS ---
         let snsCard = document.getElementById("snsCard");
         if (snsCard) {
             if (s.mode === "onboard") {
                 snsCard.style.display = "block";
-                
-                // Update math texts
                 let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
                 let activeLimit = parseFloat(s.sail_and_sign.limit) || 50;
                 let barPct = currentTab > 0 ? Math.min((currentTab / activeLimit) * 100, 100) : 0;
@@ -3781,14 +3706,12 @@ function setPaycheckWizardType(type) {
 
                 document.getElementById("snsLimitDisplay").innerText = "Limit: $" + activeLimit.toFixed(2) + " ⚙️";
 
-                
                 let pBar = document.getElementById("snsProgressBar");
                 pBar.style.width = barPct + "%";
                 if (barPct >= 90) pBar.style.backgroundColor = "var(--danger)";
                 else if (barPct >= 60) pBar.style.backgroundColor = "var(--warning)";
                 else pBar.style.backgroundColor = "var(--success)";
                 
-                // Draw Itemised Folio View
                 let folioHtml = "";
                 let fItems = s.sail_and_sign.active_folio || [];
                 fItems.forEach(item => {
@@ -3798,7 +3721,6 @@ function setPaycheckWizardType(type) {
                 });
                 document.getElementById("snsFolioList").innerHTML = folioHtml || "<div style='font-size:10px; color:var(--text-muted); text-align:center; padding:4px 0;'>No active charges logged on tab.</div>";
                 
-                // Draw Ghost Holds Bin
                 let holdsHtml = "";
                 let hItems = s.sail_and_sign.ghost_holds || [];
                 let holdsDrawer = document.getElementById("snsHoldsDrawer");
@@ -3819,7 +3741,7 @@ function setPaycheckWizardType(type) {
             }
         }
 
-                // WIRE TRANSIT BUTTON UPDATE
+        // --- 7. WIRE TRANSIT BUTTON UPDATE ---
         let uiWireBtn = document.getElementById('uiPendingWires');
         if (uiWireBtn) {
             if (s.transit_queue && s.transit_queue.length > 0) {
@@ -3830,7 +3752,6 @@ function setPaycheckWizardType(type) {
                 uiWireBtn.style.display = 'none';
             }
         }
-
     }
 
     // ==========================================
@@ -5057,52 +4978,36 @@ if(document.getElementById('advVapeBrand')) {
         return 4.0; // Absolute zero-data failsafe
     }
 
-    function renderVapeStats() {
+        function renderVapeStats() {
+        let isTND = s.mode === "vacation";
+        let sym = isTND ? "TND" : "USD";
+        let fx = parseFloat(s.fx_rate) || 2.923;
+        
+        // --- 1. Engage Universal Brains ---
+        let metrics = getVapeMetrics();
+        let daysLeft = getTimelineHorizon();
+        let liability = getVapeLiability(isTND, fx);
+
+        // --- 2. Extract UI Specifics ---
         let purchaseDates = [];
         let modeVapeSpend = 0;
-        let modeVapeDevices = 0;
         
-        /* 1. Strict Financial Isolation */
-        let modeKeys = ["vacation", "onboard"];
-        modeKeys.forEach(m => {
-            let isCurrentMode = (m === s.mode);
-            let arch = s.history[m].archive || [];
-            arch.forEach(day => {
-                let logs = day.logs || [];
-                logs.forEach(log => {
+        ['vacation', 'onboard'].forEach(m => {
+            let isCur = (m === s.mode);
+            (s.history[m].archive || []).concat([{logs: s.history[m].current || []}]).forEach(day => {
+                (day.logs || []).forEach(log => {
                     let cat = log.category || "";
-                    let isVape = (cat.indexOf("Vape") !== -1 || log.cat === "vape");
-                    if (isVape) {
-                        let amt = parseFloat(log.amount) || 0;
-                        let qty = parseInt(log.vapeQty) || 1;
-                        if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
-                        if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
-                        else if (day.date) purchaseDates.push(new Date(day.date));
+                    if (cat.indexOf("Vape") !== -1 || log.cat === "vape") {
+                        if (isCur) modeVapeSpend += (parseFloat(log.amount) || 0);
+                        purchaseDates.push(new Date(log.dateStr || day.date || Date.now()));
                     }
                 });
-            });
-            let cur = s.history[m].current || [];
-            cur.forEach(log => {
-                let cat = log.category || "";
-                let isVape = (cat.indexOf("Vape") !== -1 || log.cat === "vape");
-                if (isVape) {
-                    let amt = parseFloat(log.amount) || 0;
-                    let qty = parseInt(log.vapeQty) || 1;
-                    if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
-                    if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
-                    else purchaseDates.push(new Date()); 
-                }
             });
         });
         
         purchaseDates.sort((a, b) => a.getTime() - b.getTime());
-
-        /* 2. Unified Dynamic Burn Rate */
-        let inv = s.vape_stash.inventory || [];
-        let trueVapeBurnRate = getDynamicVapeBurnRate();
-
+        
         let daysSinceLast = 0;
-
         let lastDateStr = "N/A";
         if (purchaseDates.length > 0) {
             let lastDate = purchaseDates[purchaseDates.length - 1];
@@ -5110,70 +5015,52 @@ if(document.getElementById('advVapeBrand')) {
             lastDateStr = lastDate.toLocaleDateString();
         }
 
-        /* 3. Clever Dual-Projection Math */
-        let isTND = s.mode === "vacation";
-        let sym = isTND ? "TND" : "USD";
-        
-        let nowTs = Date.now();
-        let daysLeft = 1;
-        let daysToPayday = 0;
+        // --- 3. Payday Projection Engine ---
         let hasPayday = false;
-        
-        if (isTND) {
-            let cEnd = new Date(s.settings.contractStart).getTime();
-            daysLeft = Math.max(1, Math.ceil((cEnd - nowTs) / 86400000));
-        } else {
-            let contractEndStr = s.settings.contractEnd + "T23:59:59";
-            let cEnd = new Date(contractEndStr).getTime();
-            daysLeft = Math.max(1, Math.ceil((cEnd - nowTs) / 86400000));
-            
-            let milestones = generateContractMilestones();
-            let nextM = getNextPendingMilestone(milestones);
+        let daysToPayday = 0;
+        if (!isTND) {
+            let milestones = typeof generateContractMilestones === 'function' ? generateContractMilestones() : [];
+            let nextM = typeof getNextPendingMilestone === 'function' ? getNextPendingMilestone(milestones) : null;
             if (nextM) {
-                let paydayStr = nextM.paydayDateStr + "T23:59:59";
-                let pDate = new Date(paydayStr).getTime();
-                daysToPayday = Math.max(0, Math.ceil((pDate - nowTs) / 86400000));
+                let pDate = new Date(nextM.paydayDateStr + "T23:59:59").getTime();
+                daysToPayday = Math.max(0, Math.ceil((pDate - Date.now()) / 86400000));
                 hasPayday = true;
             }
         }
-        
-        let currentStash = parseInt(s.vape_stash.count) || 0;
-        let projectedVapesNeeded = daysLeft / trueVapeBurnRate;
-        let vapesToBuy = Math.max(0, projectedVapesNeeded - currentStash);
-        let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (isTND ? 35 : 10);
-        let projectedSpend = vapesToBuy * modeAvgCost;
 
         let paydayProjHTML = "";
         if (hasPayday && daysToPayday > 0) {
-            let pdVapesNeeded = daysToPayday / trueVapeBurnRate;
-            let pdVapesToBuy = Math.max(0, pdVapesNeeded - currentStash);
-            let pdProjectedSpend = pdVapesToBuy * modeAvgCost;
+            let pdVapesNeeded = daysToPayday / metrics.trueBurnRate;
+            let pdVapesToBuy = Math.max(0, pdVapesNeeded - metrics.currentStash);
+            let pdProjectedSpend = pdVapesToBuy * metrics.modeAvgCost;
             paydayProjHTML = `<div style="display:flex; justify-content:space-between; font-size:11px; border-top:1px dashed var(--panel-border); padding-top:6px; margin-top:6px;">
                 <span>Est. Payday Spend (${daysToPayday} Days):</span>
                 <strong style="color:var(--success);">~${Math.ceil(pdVapesToBuy)} Vapes (${pdProjectedSpend.toFixed(2)} ${sym})</strong>
             </div>`;
         }
 
+        // --- 4. Render HTML Data Matrix ---
         let modeName = isTND ? "Vacation" : "Onboard";
-        let restockColor = daysSinceLast < trueVapeBurnRate ? "color:var(--success);" : "color:var(--danger);";
+        let restockColor = daysSinceLast < metrics.trueBurnRate ? "color:var(--success);" : "color:var(--danger);";
         let restockText = purchaseDates.length > 0 ? (daysSinceLast + " Days (" + lastDateStr + ")") : "No Data";
 
         let h = "";
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>${modeName} Spend:</span> <strong style="color:var(--danger);">${modeVapeSpend.toFixed(2)} ${sym}</strong></div>`;
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>${modeName} Avg Cost:</span> <strong style="color:var(--text);">${modeAvgCost.toFixed(2)} ${sym} / Vape</strong></div>`;
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>True Burn Rate:</span> <strong style="color:var(--warning);">1 Vape / ${trueVapeBurnRate.toFixed(1)} Days</strong></div>`;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>${modeName} Avg Cost:</span> <strong style="color:var(--text);">${metrics.modeAvgCost.toFixed(2)} ${sym} / Vape</strong></div>`;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>True Burn Rate:</span> <strong style="color:var(--warning);">1 Vape / ${metrics.trueBurnRate.toFixed(1)} Days</strong></div>`;
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Days Since Last Restock:</span> <strong style="${restockColor}">${restockText}</strong></div>`;
-        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Current Stash Inventory:</span> <strong style="color:#a855f7;">${currentStash} Devices Ready</strong></div>`;
+        h += `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>Current Stash Inventory:</span> <strong style="color:#a855f7;">${metrics.currentStash} Devices Ready</strong></div>`;
         
         h += `<div style="display:flex; justify-content:space-between; font-size:11px; border-top:1px dashed var(--panel-border); padding-top:6px; margin-top:6px;">`;
         h += `<span>Est. Phase Spend (${daysLeft} Days):</span>`;
-        h += `<strong style="color:#38bdf8;">~${Math.ceil(vapesToBuy)} Vapes (${projectedSpend.toFixed(2)} ${sym})</strong></div>`;
+        h += `<strong style="color:#38bdf8;">~${Math.ceil(liability.vapesToBuy)} Vapes (${liability.vapeDisp.toFixed(2)} ${sym})</strong></div>`;
         
         h += paydayProjHTML;
 
-        /* 4. THE ARMORY INJECTION */
+        // --- 5. THE ARMORY INJECTION (Unchanged V38.3 Tech) ---
         h += `<div style="margin-top:15px; font-size:11px; font-weight:bold; color:var(--text); border-bottom:1px solid var(--panel-border); padding-bottom:4px;">🛡️ The Armory (Inventory)</div>`;
         
+        let inv = (s.vape_stash && s.vape_stash.inventory) ? s.vape_stash.inventory : [];
         let actives = inv.filter(v => v.status === "active");
         if(actives.length > 0) {
             h += `<div style="margin-top:8px; color:var(--success); font-size:10px; font-weight:bold;">🟢 Active Units</div>`;
@@ -5183,9 +5070,8 @@ if(document.getElementById('advVapeBrand')) {
                 let puffStr = v.puffs ? (v.puffs + " Puffs") : "";
                 let mlStr = v.ml ? (v.ml + " ML") : "";
                 
-                // NEW: Mathematical Health Bar & Est Death
-                let estLifeLeft = Math.max(0, trueVapeBurnRate - activeDaysNum);
-                let healthPct = Math.max(0, Math.min(100, (estLifeLeft / trueVapeBurnRate) * 100));
+                let estLifeLeft = Math.max(0, metrics.trueBurnRate - activeDaysNum);
+                let healthPct = Math.max(0, Math.min(100, (estLifeLeft / metrics.trueBurnRate) * 100));
                 let healthColor = healthPct > 30 ? 'var(--success)' : (healthPct > 15 ? 'var(--warning)' : 'var(--danger)');
                 let deathDate = new Date(Date.now() + (estLifeLeft * 86400000)).toLocaleDateString('en-US', {month:'short', day:'numeric'});
                 
@@ -5234,10 +5120,9 @@ if(document.getElementById('advVapeBrand')) {
                 let daysLivedNum = v.opened_ts && v.killed_ts ? ((v.killed_ts - v.opened_ts)/86400000) : 0;
                 let daysLived = daysLivedNum > 0 ? daysLivedNum.toFixed(1) : "?";
                 
-                // NEW: ROI Cost Per Day Engine
                 let cpdHtml = '';
                 if (daysLivedNum > 0) {
-                    let cpd = modeAvgCost / daysLivedNum;
+                    let cpd = metrics.modeAvgCost / daysLivedNum;
                     cpdHtml = `<span style="color:var(--warning); font-weight:bold;">${cpd.toFixed(2)} ${sym}/day</span>`;
                 } else {
                     cpdHtml = `<span style="color:var(--text-muted);">N/A</span>`;
