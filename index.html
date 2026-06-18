@@ -1036,7 +1036,7 @@
             </div>
         </div>
 
-    </div> <div class="modal-overlay" id="diagnosticsModal">
+        <div class="modal-overlay" id="diagnosticsModal">
         <div class="modal-content">
             <div class="title" style="text-align:center; font-size:12px; color:var(--text);">
                 📊 Runway Diagnostics (<span id="diagModeLbl">TND</span>)
@@ -1044,40 +1044,57 @@
             
             <div style="margin-top:15px; background:var(--vault-bg); padding:12px; border-radius:10px; border:1px solid var(--panel-border);">
                 <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px;">
-                    <span>💰 Gross Assets:</span> 
+                    <span>💰 Gross Wealth:</span> 
                     <strong id="diagGross">0.00</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--danger); margin-bottom:4px;">
-                    <span>🔒 Earmarked:</span> 
+                    <span>🔒 Earmarked & Vapes:</span> 
                     <span id="diagEarmarked">-0.00</span>
                 </div>
                 <div style="font-size:10px; color:var(--text-muted); padding-left:15px; margin-bottom:12px; display:flex; flex-direction:column; gap:4px;">
                     <div style="display:flex; justify-content:space-between;"><span>📁 Envelopes:</span> <strong id="diagEnv" style="color:var(--text);">-0.00</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span>💨 Vapes:</span> <strong id="diagVape" style="color:var(--text);">-0.00</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span>🏆 Buffers:</span> <strong id="diagBuf" style="color:var(--text);">-0.00</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span>💨 Vapes to Payday:</span> <strong id="diagVape" style="color:var(--text);">-0.00</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span>🏆 Locked Buffers:</span> <strong id="diagBuf" style="color:var(--text);">-0.00</strong></div>
                 </div>
-
                 <div style="display:flex; justify-content:space-between; font-size:14px; border-top:1px dashed var(--panel-border); padding-top:10px; color:var(--success); font-weight:bold;">
-                    <span>💎 Core Capital:</span> 
+                    <span>💎 Net Core Capital:</span> 
                     <span id="diagCore">0.00</span>
                 </div>
             </div>
 
             <div style="margin-top:15px; border-top:1px dashed var(--panel-border); padding-top:15px;">
-                <div class="title" style="color:#38bdf8;">Pacing & Forecast</div>
+                <div class="title" style="color:#38bdf8; margin-bottom: 10px;">4-Point Stress Test</div>
                 
-                <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:10px;">
-                    <span>⚖️ Core Allowance:</span> 
-                    <strong id="diagAllowance" style="color:var(--success);">0.00 / day</strong>
+                <div style="background:var(--vault-bg); padding:10px; border-radius:8px; border:1px solid var(--panel-border); margin-bottom:8px;">
+                    <div style="font-size:10px; color:var(--text-muted); font-weight:bold; margin-bottom:4px;">A. THE ILLUSION (Gross vs Target)</div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <span>Target Allowance: <span id="diagAllowanceA" style="color:var(--text);">0.00/d</span></span>
+                        <strong id="diagRunwayA" style="color:var(--success);">0 Days</strong>
+                    </div>
                 </div>
-                
-                <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:10px;">
-                    <span>🛫 Core Runway:</span> 
-                    <strong id="diagRunway" style="color:var(--warning);">0 Days</strong>
+
+                <div style="background:var(--vault-bg); padding:10px; border-radius:8px; border:1px solid var(--panel-border); margin-bottom:8px;">
+                    <div style="font-size:10px; color:var(--accent); font-weight:bold; margin-bottom:4px;">B. THE BASELINE (Net vs Target)</div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <span>Target Allowance: <span id="diagAllowanceB" style="color:var(--text);">0.00/d</span></span>
+                        <strong id="diagRunwayB" style="color:var(--accent);">0 Days</strong>
+                    </div>
                 </div>
-                
-                <div id="diagVerdict" style="margin-top:12px; font-size:10px; line-height:1.4; padding:8px; border-radius:8px; text-align:center; background:rgba(15,23,42,0.5);">
-                    Analyzing true burn against core capital...
+
+                <div style="background:var(--vault-bg); padding:10px; border-radius:8px; border:1px solid var(--panel-border); margin-bottom:8px;">
+                    <div style="font-size:10px; color:var(--warning); font-weight:bold; margin-bottom:4px;">C. THE REALITY (Net vs Avg Spend)</div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <span>Avg Daily Spend: <span id="diagAllowanceC" style="color:var(--text);">0.00/d</span></span>
+                        <strong id="diagRunwayC" style="color:var(--warning);">0 Days</strong>
+                    </div>
+                </div>
+
+                <div style="background:rgba(248, 113, 113, 0.05); padding:10px; border-radius:8px; border:1px solid rgba(248, 113, 113, 0.2);">
+                    <div style="font-size:10px; color:var(--danger); font-weight:bold; margin-bottom:4px;">D. THE REDLINE (Gross vs True Burn)</div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <span>True Burn (All-in): <span id="diagAllowanceD" style="color:var(--text);">0.00/d</span></span>
+                        <strong id="diagRunwayD" style="color:var(--danger);">0 Days</strong>
+                    </div>
                 </div>
             </div>
 
@@ -1086,6 +1103,7 @@
             </button>
         </div>
     </div>
+
 
     <div class="modal-overlay" id="runwayLockModal">
         <div class="modal-content">
@@ -3195,6 +3213,49 @@ function setPaycheckWizardType(type) {
         };
     }
 
+        function getSpendingAnalytics() {
+        let modeArch = s.history[s.mode].archive || [];
+        let totalModeSpend = 0; 
+        let trueTotalModeSpend = 0;
+        let validModeDays = 0;
+
+        modeArch.forEach(day => { 
+            let spent = 0, trueSpent = 0;
+            (day.logs || []).forEach(item => {
+                let amt = parseFloat(item.amount) || 0;
+                let spl = parseFloat(item.spillover) || 0;
+                if (item.category !== "🏦 Financial & Fees") {
+                    spent += (item.bypassLimit ? spl : amt);
+                    trueSpent += amt;
+                }
+            });
+            totalModeSpend += spent; 
+            trueTotalModeSpend += trueSpent;
+            validModeDays++; 
+        });
+
+        let spentToday = 0, trueSpentToday = 0;
+        (s.history[s.mode].current || []).forEach(item => {
+            let amt = parseFloat(item.amount) || 0;
+            let spl = parseFloat(item.spillover) || 0;
+            if (item.category !== "🏦 Financial & Fees") {
+                spentToday += (item.bypassLimit ? spl : amt);
+                trueSpentToday += amt;
+            }
+        });
+
+        if (s.history[s.mode].current && s.history[s.mode].current.length > 0) { 
+            totalModeSpend += spentToday;
+            trueTotalModeSpend += trueSpentToday;
+            validModeDays++; 
+        }
+
+        return {
+            avgSpend: validModeDays > 0 ? (totalModeSpend / validModeDays) : 0,
+            trueAvgSpend: validModeDays > 0 ? (trueTotalModeSpend / validModeDays) : 0
+        };
+    }
+
     function calculateRunwayDiagnostics() {
         let isTND = s.mode === 'vacation';
         let sym = isTND ? ' TND' : ' USD';
@@ -3202,143 +3263,51 @@ function setPaycheckWizardType(type) {
         
         document.getElementById('diagModeLbl').innerText = isTND ? 'TND' : 'USD';
         
-        // --- 1. Calculate Envelopes ---
-        let envTND = 0; 
-        Object.values(s.projects.envelopes || {}).filter(e => !e.archived).forEach(e => { 
-            let tgt = parseFloat(e.target) || 0; 
-            let spt = parseFloat(e.spent) || 0;
-            let b = tgt - spt; 
-            if (b > 0) envTND += (e.currency === 'USD' ? b * fx : b); 
-        });
+        // --- 1. Engage Universal Brains ---
+        let earmarks = getGlobalEarmarks(fx);
+        let vapeData = getVapeLiability(isTND, fx);
+        let spending = getSpendingAnalytics();
         
-        // --- 2. CLEVER VAPE PROJECTION ---
-        let nowTs = Date.now();
-        let daysLeft = 1;
-        if (isTND) {
-            let cEnd = new Date(s.settings.contractStart).getTime();
-            daysLeft = Math.max(1, Math.ceil((cEnd - nowTs) / 86400000));
-        } else {
-            let seed = new Date('2026-08-21T00:00:00Z').getTime();
-            if (nowTs < seed) {
-                daysLeft = Math.max(1, Math.ceil((seed - nowTs) / 86400000));
-            } else {
-                let msSince = nowTs - seed;
-                let cycles = Math.floor(msSince / (14 * 86400000));
-                let nextPayday = seed + ((cycles + 1) * 14 * 86400000);
-                daysLeft = Math.max(1, Math.ceil((nextPayday - nowTs) / 86400000));
-            }
-        }
+        // Combine TND liabilities for the Maritime Firewall
+        let totalLiabilitiesTND = earmarks.totalTND + vapeData.vapeTND;
+        let liquidity = getDeployableLiquidity(totalLiabilitiesTND, isTND, fx);
 
-        let estDevices = 0;
-        let purchaseDates = [];
-        let modeVapeSpend = 0;
-        let modeVapeDevices = 0;
+        let targetAllowance = parseFloat(s.history[s.mode].limit) || 0;
 
-        ['vacation', 'onboard'].forEach(m => {
-            let isCurrentMode = (m === s.mode);
-            (s.history[m].archive || []).forEach(day => {
-                (day.logs || []).forEach(log => {
-                    if (log.category === '💨 Vape' || log.cat === 'vape') {
-                        let amt = parseFloat(log.amount) || 0;
-                        let qty = parseInt(log.vapeQty) || 1;
-                        estDevices += qty;
-                        if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
-                        if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
-                        else if (day.date) purchaseDates.push(new Date(day.date));
-                    }
-                });
-            });
-            (s.history[m].current || []).forEach(log => {
-                if (log.category === '💨 Vape' || log.cat === 'vape') {
-                    let amt = parseFloat(log.amount) || 0;
-                    let qty = parseInt(log.vapeQty) || 1;
-                    estDevices += qty;
-                    if (isCurrentMode) { modeVapeSpend += amt; modeVapeDevices += qty; }
-                    if (log.dateStr) purchaseDates.push(new Date(log.dateStr));
-                    else purchaseDates.push(new Date()); 
-                }
-            });
-        });
-
-        let currentStash = parseInt(s.vape_stash.count) || 0;
-        let trueVapeBurnRate = getDynamicVapeBurnRate();
-        let projectedVapesNeeded = daysLeft / trueVapeBurnRate;
-
-        let vapesToBuy = Math.max(0, projectedVapesNeeded - currentStash);
-        let modeAvgCost = modeVapeDevices > 0 ? (modeVapeSpend / modeVapeDevices) : (isTND ? 35 : 10);
+        // --- 2. Extract Data & Apply Formatting ---
+        let envDisp = isTND ? earmarks.envTND : earmarks.envTND / fx;
+        let bufDisp = isTND ? earmarks.bufTND : earmarks.bufTND / fx;
         
-        let projectedVapeSpend = vapesToBuy * modeAvgCost;
-        let vapeTND = isTND ? projectedVapeSpend : (projectedVapeSpend * fx);
-
-        // --- 3. Calculate Buffers ---
-        let bufTND = 0; 
-        (s.projects.goals || []).filter(g => g.lockedFromRunway).forEach(g => { 
-            let svd = parseFloat(g.saved) || 0;
-            bufTND += (g.currency === 'USD' ? svd * fx : svd); 
-        });
-        
-        let earmarkedTND = envTND + vapeTND + bufTND;
-
-        // --- 4. Calculate Gross Assets & Core Capital (FIREWALLED) ---
-        let envDisp = isTND ? envTND : envTND / fx;
-        let vapeDisp = isTND ? vapeTND : vapeTND / fx;
-        let bufDisp = isTND ? bufTND : bufTND / fx;
-        let totalEarmarkDisp = envDisp + vapeDisp + bufDisp;
-
+        // --- 3. Update the UI Balance Sheet ---
+        document.getElementById('diagGross').innerText = liquidity.grossDisp.toFixed(2) + sym;
         document.getElementById('diagEnv').innerText = "-" + envDisp.toFixed(2) + sym;
-        document.getElementById('diagVape').innerText = "-" + vapeDisp.toFixed(2) + sym;
         document.getElementById('diagBuf').innerText = "-" + bufDisp.toFixed(2) + sym;
-        document.getElementById('diagEarmarked').innerText = "-" + totalEarmarkDisp.toFixed(2) + sym;
+        document.getElementById('diagVape').innerText = "-" + vapeData.vapeDisp.toFixed(2) + sym;
+        document.getElementById('diagEarmarked').innerText = "-" + liquidity.totalEarmarkDisp.toFixed(2) + sym;
+        
+        document.getElementById('diagCore').innerText = Math.max(0, liquidity.coreDisp).toFixed(2) + sym;
 
-        let grossDisp = 0;
-        let coreDisp = 0;
+        // --- 4. The 4-Point Stress Test ---
+        let gross = liquidity.grossDisp;
+        let netCore = Math.max(0, liquidity.coreDisp);
+        
+        // Scenario A: The Illusion (Gross vs Target)
+        document.getElementById('diagAllowanceA').innerText = targetAllowance.toFixed(2) + sym;
+        document.getElementById('diagRunwayA').innerText = targetAllowance > 0 ? (gross / targetAllowance).toFixed(0) + " Days" : "∞ Days";
 
-        if (isTND) {
-            let grossTND = (parseFloat(s.vault.cash_tnd) || 0) + 
-                           (parseFloat(s.vault.savings) || 0) + 
-                           (((parseFloat(s.vault.cash_usd) || 0) + 
-                             (parseFloat(s.vault.brightwell) || 0) + 
-                             (parseFloat(s.vault.wise) || 0)) * fx);
-            grossDisp = grossTND;
-            coreDisp = grossTND - earmarkedTND;
-        } else {
-            // ONBOARD MODE FIREWALL: Only USD Liquidity
-            let grossUSD = (parseFloat(s.vault.cash_usd) || 0) + 
-                           (parseFloat(s.vault.brightwell) || 0) + 
-                           (parseFloat(s.vault.wise) || 0);
-            grossDisp = grossUSD;
-            coreDisp = grossUSD - totalEarmarkDisp; // Subtract ALL global liabilities (USD + TND) from USD pool
-        }
-        
-        document.getElementById('diagGross').innerText = grossDisp.toFixed(2) + sym;
-        document.getElementById('diagCore').innerText = coreDisp.toFixed(2) + sym;
+        // Scenario B: The Baseline (Net vs Target)
+        document.getElementById('diagAllowanceB').innerText = targetAllowance.toFixed(2) + sym;
+        document.getElementById('diagRunwayB').innerText = targetAllowance > 0 ? (netCore / targetAllowance).toFixed(0) + " Days" : "∞ Days";
 
-        
-        // --- 5. Core Forecasts ---
-        let trueBurn = calculateTrueBurn(); 
-        let coreAllowance = coreDisp / daysLeft;
-        
-        document.getElementById('diagAllowance').innerText = coreAllowance.toFixed(2) + sym + ' / day';
-        
-        if (trueBurn > 0) {
-            let coreRunway = coreDisp / trueBurn;
-            document.getElementById('diagRunway').innerText = coreRunway.toFixed(0) + " Days";
-        } else {
-            document.getElementById('diagRunway').innerText = "∞ Days (No Burn Data)";
-        }
-        
-        let v = document.getElementById('diagVerdict');
-        if (trueBurn === 0) {
-            v.style.backgroundColor = 'rgba(74, 222, 128, 0.2)'; v.style.color = 'var(--success)';
-            v.innerText = `🟢 Excellent. No daily burn detected yet. Keep protecting your core capital.`;
-        } else if (trueBurn <= coreAllowance) {
-            v.style.backgroundColor = 'rgba(74, 222, 128, 0.2)'; v.style.color = 'var(--success)';
-            v.innerText = `🟢 Excellent. Your natural lifestyle (${trueBurn.toFixed(1)}) is burning slower than your core allowance (${coreAllowance.toFixed(1)}). You are generating surplus.`;
-        } else {
-            v.style.backgroundColor = 'rgba(248, 113, 113, 0.2)'; v.style.color = 'var(--danger)';
-            v.innerText = `🔴 Warning. Your natural lifestyle (${trueBurn.toFixed(1)}) is outpacing your core allowance (${coreAllowance.toFixed(1)}). You are bleeding capital. Tighten your daily burn.`;
-        }
+        // Scenario C: The Reality (Net vs Avg Spend)
+        document.getElementById('diagAllowanceC').innerText = spending.avgSpend.toFixed(2) + sym;
+        document.getElementById('diagRunwayC').innerText = spending.avgSpend > 0 ? (netCore / spending.avgSpend).toFixed(0) + " Days" : "∞ Days";
+
+        // Scenario D: The Redline (Gross vs True Burn)
+        document.getElementById('diagAllowanceD').innerText = spending.trueAvgSpend.toFixed(2) + sym;
+        document.getElementById('diagRunwayD').innerText = spending.trueAvgSpend > 0 ? (gross / spending.trueAvgSpend).toFixed(0) + " Days" : "∞ Days";
     }
+
 
     function calculateTrueBurn() {
         let days = [...(s.history[s.mode].archive || [])];
