@@ -3079,29 +3079,7 @@ function setPaycheckWizardType(type) {
         document.getElementById('diagnosticsModal').style.display = 'flex';
     }
 
-    function getDynamicVapeBurnRate() {
-        let estD = 0; let pDates = [];
-        ['vacation', 'onboard'].forEach(m => {
-            (s.history[m].archive || []).concat([{logs: s.history[m].current || []}]).forEach(d => {
-                (d.logs || []).forEach(l => {
-                    if (l.category === '💨 Vape' || l.cat === 'vape') {
-                        estD += (parseInt(l.vapeQty) || 1);
-                        pDates.push(new Date(l.dateStr || d.date || Date.now()));
-                    }
-                });
-            });
-        });
-        let cStash = parseInt(s.vape_stash.count) || 0;
-        let cDev = Math.max(0.5, estD - cStash);
-        if (pDates.length > 0) {
-            pDates.sort((a,b) => a-b);
-            let daysSmoke = Math.max(1, (Date.now() - pDates[0].getTime()) / 86400000);
-            return daysSmoke / cDev;
-        }
-        return 4; // Fallback
-    }
-
-        // ==========================================
+    // ==========================================
     // --- V38.2 UNIVERSAL BRAIN ENGINES ---
     // ==========================================
     
@@ -4929,54 +4907,6 @@ if(document.getElementById('advVapeBrand')) {
         }
     }
 
-
-        function getDynamicVapeBurnRate() {
-        let inv = s.vape_stash.inventory || [];
-        let dead = inv.filter(v => v.status === "dead");
-
-        // 1. Primary Engine: The Graveyard (Most accurate)
-        if (dead.length > 0) {
-            let totalLifespans = 0;
-            let validDeadCount = 0;
-            dead.forEach(v => {
-                if (v.opened_ts && v.killed_ts) {
-                    totalLifespans += (v.killed_ts - v.opened_ts) / 86400000;
-                    validDeadCount++;
-                }
-            });
-            if (validDeadCount > 0) return totalLifespans / validDeadCount;
-        }
-
-        // 2. Secondary Engine: Purchase History (Fallback if Graveyard is empty)
-        let globalDevices = 0;
-        let purchaseDates = [];
-        ['vacation', 'onboard'].forEach(m => {
-            (s.history[m].archive || []).forEach(day => {
-                (day.logs || []).forEach(log => {
-                    if (log.category === '💨 Vape' || log.cat === 'vape') {
-                        globalDevices += (parseInt(log.vapeQty) || 1);
-                        purchaseDates.push(log.dateStr ? new Date(log.dateStr) : new Date(day.date));
-                    }
-                });
-            });
-            (s.history[m].current || []).forEach(log => {
-                if (log.category === '💨 Vape' || log.cat === 'vape') {
-                    globalDevices += (parseInt(log.vapeQty) || 1);
-                    purchaseDates.push(log.dateStr ? new Date(log.dateStr) : new Date());
-                }
-            });
-        });
-
-        if (purchaseDates.length > 0) {
-            purchaseDates.sort((a, b) => a.getTime() - b.getTime());
-            let currentStash = parseInt(s.vape_stash.count) || 0;
-            let consumedDevices = Math.max(0.5, globalDevices - currentStash);
-            let totalDaysSmoking = Math.max(1, (Date.now() - purchaseDates[0].getTime()) / 86400000);
-            return totalDaysSmoking / consumedDevices;
-        }
-
-        return 4.0; // Absolute zero-data failsafe
-    }
 
         function renderVapeStats() {
         let isTND = s.mode === "vacation";
