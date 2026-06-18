@@ -3083,7 +3083,118 @@ function setPaycheckWizardType(type) {
         return 4; // Fallback
     }
 
+        // ==========================================
+    // --- V38.2 UNIVERSAL BRAIN ENGINES ---
+    // ==========================================
     
+    function getVapeMetrics() {
+        let estD = 0, pDates = [], modeSpend = 0, modeDev = 0;
+        
+        // 1. Scan for Mode Average Cost
+        ['vacation', 'onboard'].forEach(m => {
+            let isCur = (m === s.mode);
+            (s.history[m].archive || []).concat([{logs: s.history[m].current || []}]).forEach(d => {
+                (d.logs || []).forEach(l => {
+                    if (l.category === '💨 Vape' || l.cat === 'vape') {
+                        let q = parseInt(l.vapeQty) || 1;
+                        estD += q;
+                        if (isCur) { modeSpend += (parseFloat(l.amount) || 0); modeDev += q; }
+                        pDates.push(new Date(l.dateStr || d.date || Date.now()));
+                    }
+                });
+            });
+        });
+        
+        let cStash = (s.vape_stash && s.vape_stash.count) ? parseInt(s.vape_stash.count) : 0;
+        let trueBurn = 4.0; 
+        
+        // 2. Primary Engine: The Graveyard (V38.3 Tech Preserved)
+        let inv = (s.vape_stash && s.vape_stash.inventory) ? s.vape_stash.inventory : [];
+        let dead = inv.filter(v => v.status === "dead");
+        
+        if (dead.length > 0) {
+            let totalLifespans = 0;
+            let validDeadCount = 0;
+            dead.forEach(v => {
+                if (v.opened_ts && v.killed_ts) {
+                    totalLifespans += (v.killed_ts - v.opened_ts) / 86400000;
+                    validDeadCount++;
+                }
+            });
+            if (validDeadCount > 0) trueBurn = totalLifespans / validDeadCount;
+        } 
+        // 3. Secondary Engine: Purchase History (Fallback)
+        else if (pDates.length > 0) {
+            pDates.sort((a, b) => a.getTime() - b.getTime());
+            let consumed = Math.max(0.5, estD - cStash);
+            trueBurn = Math.max(1, (Date.now() - pDates[0].getTime()) / 86400000) / consumed;
+        }
+
+        return {
+            trueBurnRate: trueBurn,
+            currentStash: cStash,
+            modeAvgCost: modeDev > 0 ? (modeSpend / modeDev) : (s.mode === 'vacation' ? 35 : 10)
+        };
+    }
+
+    function getTimelineHorizon() {
+        let nowTs = Date.now();
+        if (s.mode === 'vacation') {
+            let cEnd = new Date(s.settings.contractStart).getTime();
+            return Math.max(1, Math.ceil((cEnd - nowTs) / 86400000));
+        } else {
+            let milestones = typeof generateContractMilestones === 'function' ? generateContractMilestones() : [];
+            let next = typeof getNextPendingMilestone === 'function' ? getNextPendingMilestone(milestones) : null;
+            let targetDate = next ? new Date(next.paydayDateStr + 'T00:00:00').getTime() : new Date(s.settings.contractEnd).getTime();
+            return Math.max(1, Math.ceil((targetDate - nowTs) / 86400000));
+        }
+    }
+
+    function getVapeLiability(isTND, fx) {
+        let metrics = getVapeMetrics();
+        let daysLeft = getTimelineHorizon();
+        let projectedNeeded = daysLeft / metrics.trueBurnRate;
+        let vapesToBuy = Math.max(0, projectedNeeded - metrics.currentStash);
+        let projectedSpend = vapesToBuy * metrics.modeAvgCost;
+        let vapeTND = isTND ? projectedSpend : (projectedSpend * fx);
+        return {
+            vapesToBuy: vapesToBuy,
+            vapeTND: vapeTND,
+            vapeDisp: isTND ? vapeTND : vapeTND / fx
+        };
+    }
+
+    function getGlobalEarmarks(fx) {
+        let envTND = 0, bufTND = 0;
+        Object.values(s.projects.envelopes || {}).filter(e => !e.archived).forEach(e => { 
+            let b = (parseFloat(e.target) || 0) - (parseFloat(e.spent) || 0); 
+            if (b > 0) envTND += (e.currency === 'USD' ? b * fx : b); 
+        });
+        (s.projects.goals || []).filter(g => g.lockedFromRunway).forEach(g => { 
+            let svd = parseFloat(g.saved) || 0;
+            bufTND += (g.currency === 'USD' ? svd * fx : svd); 
+        });
+        return { envTND, bufTND, totalTND: envTND + bufTND };
+    }
+
+    function getDeployableLiquidity(totalEarmarksTND, isTND, fx) {
+        let grossDisp = 0;
+        let totalEarmarkDisp = isTND ? totalEarmarksTND : totalEarmarksTND / fx;
+
+        if (isTND) {
+            grossDisp = (parseFloat(s.vault.cash_tnd) || 0) + (parseFloat(s.vault.savings) || 0) + 
+                        (((parseFloat(s.vault.cash_usd) || 0) + (parseFloat(s.vault.brightwell) || 0) + (parseFloat(s.vault.wise) || 0)) * fx);
+        } else {
+            grossDisp = (parseFloat(s.vault.cash_usd) || 0) + (parseFloat(s.vault.brightwell) || 0) + (parseFloat(s.vault.wise) || 0);
+        }
+        
+        return { 
+            grossDisp: grossDisp, 
+            coreDisp: grossDisp - totalEarmarkDisp, 
+            totalEarmarkDisp: totalEarmarkDisp 
+        };
+    }
+
     function calculateRunwayDiagnostics() {
         let isTND = s.mode === 'vacation';
         let sym = isTND ? ' TND' : ' USD';
