@@ -3175,6 +3175,8 @@ function setPaycheckWizardType(type) {
             
             // Re-render UI if on logs tab
             if (typeof renderVoyageLedger === 'function') renderVoyageLedger();
+            if (typeof injectGeospatialData === 'function') injectGeospatialData();
+
             
         } catch (e) {
             alert("❌ Invalid JSON format. Error: " + e.message);
@@ -3262,6 +3264,46 @@ function setPaycheckWizardType(type) {
         </div>`;
 
         container.innerHTML = headerHtml + html;
+    }
+    
+    function injectGeospatialData() {
+        if (s.mode !== 'onboard') return;
+        
+        let locInput = document.getElementById('advLocation');
+        let geoSelect = document.getElementById('advGeoTag');
+        if (!locInput || !geoSelect) return;
+
+        // Safety: Only auto-fill if the field is empty (meaning the app just loaded, or logExpense() just cleared it)
+        if (locInput.value !== "") return;
+
+        // Get local date in YYYY-MM-DD
+        let d = new Date();
+        let month = '' + (d.getMonth() + 1);
+        let day = '' + d.getDate();
+        let year = d.getFullYear();
+        if (month.length < 2) month = '0' + month;
+        if (day.length < 2) day = '0' + day;
+        let todayStr = [year, month, day].join('-');
+
+        // Sweep the itinerary array for a date match
+        let voyages = (s.contract_profile && s.contract_profile.voyages) ? s.contract_profile.voyages : [];
+        for (let v of voyages) {
+            if (todayStr >= v.startDate && todayStr <= v.endDate) {
+                let portObj = (v.itinerary || []).find(i => i.date === todayStr);
+                if (portObj && portObj.port) {
+                    // Inject the Port Name
+                    locInput.value = portObj.port;
+                    
+                    // Auto-categorize the GeoTag
+                    if (portObj.port.toLowerCase().includes('sea day')) {
+                        geoSelect.value = "🌊 Sea Day";
+                    } else {
+                        geoSelect.value = "🌴 Port (Went Ashore)";
+                    }
+                    break;
+                }
+            }
+        }
     }
 
 
