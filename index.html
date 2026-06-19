@@ -918,7 +918,6 @@
                     </div>
 
                     <div style="display:flex; gap:6px; margin-bottom:12px;">
-                        <button class="v-btn" style="flex:1; background:#16a34a; padding:8px 4px; font-size:10px;" onclick="logVoyageCompletion()">🚢 Log Voyage Completion</button>
                         <button class="v-btn" style="flex:1; background:#ca8a04; padding:8px 4px; font-size:10px;" onclick="manageDryDockOverride()">⚓ Manage Dry Dock</button>
                     </div>
 
@@ -953,27 +952,33 @@
                 </div>
                 <div id="voyageLedgerHtml" style="margin-top:10px; margin-bottom:10px;"></div>
 
-            <div class="modal-overlay" id="commissionModal">
-                <div class="modal-content">
-                    <div class="title" style="color:#38bdf8;">Log Cruise Commission</div>
-                    <p id="commVoyageLabel" style="font-size:11px; color:var(--text-muted); margin-bottom:15px;"></p>
-                    <input type="hidden" id="commVoyageId">
-                    
-                    <div class="input-group">
-                        <label style="font-size:10px; color:var(--text-muted); font-weight:bold;">Sales & Efficiency (USD)</label>
-                        <input type="number" id="commSales" placeholder="0.00" step="0.01" style="margin-bottom:10px; width:100%;">
-                    </div>
-                    <div class="input-group">
-                        <label style="font-size:10px; color:var(--text-muted); font-weight:bold;">Dreams Studio (USD)</label>
-                        <input type="number" id="commDreams" placeholder="0.00" step="0.01" style="width:100%;">
-                    </div>
-                    
-                    <div class="modal-btn-row">
-                        <button class="btn-secondary" onclick="document.getElementById('commissionModal').style.display='none'">Cancel</button>
-                        <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="saveVoyageCommission()">Save</button>
-                    </div>
+        <div class="modal-overlay" id="commissionModal">
+            <div class="modal-content">
+                <div class="title" style="color:#38bdf8;">Log Cruise Commission</div>
+                <p id="commVoyageLabel" style="font-size:11px; color:var(--text-muted); margin-bottom:15px;"></p>
+                <input type="hidden" id="commVoyageId">
+
+                <div class="input-group">
+                    <label style="font-size:10px; color:var(--text-muted); font-weight:bold;">Sales & Efficiency (USD)</label>
+                    <input type="number" id="commSales" placeholder="0.00" step="0.01" style="margin-bottom:10px; width:100%;">
+                </div>
+                <div class="input-group">
+                    <label style="font-size:10px; color:var(--text-muted); font-weight:bold;">Dreams Studio (USD)</label>
+                    <input type="number" id="commDreams" placeholder="0.00" step="0.01" style="margin-bottom:10px; width:100%;">
+                </div>
+                <div class="input-group" style="padding:10px; background:rgba(168, 85, 247, 0.1); border:1px dashed #a855f7; border-radius:8px; margin-top:10px;">
+                    <label style="font-size:10px; color:#a855f7; font-weight:bold;">Monthly Bonus (USD)</label>
+                    <input type="number" id="commBonus" placeholder="Leave 0.00 if none" step="0.01" style="width:100%; border-color:#a855f7;">
+                    <div style="font-size:8px; color:var(--text-muted); margin-top:4px;">*Only fill this if the delayed monthly bonus arrived during this specific cruise.</div>
+                </div>
+
+                <div class="modal-btn-row">
+                    <button class="btn-secondary" onclick="document.getElementById('commissionModal').style.display='none'">Cancel</button>
+                    <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="saveVoyageCommission()">Save</button>
                 </div>
             </div>
+        </div>
+
 
 
             </div>
@@ -2634,20 +2639,6 @@ async function updatePositionProfile() {
     renderContractTracker();
 }
 
-async function logVoyageCompletion() {
-    let commStr = await openUPrompt("Log Voyage Commission", "Enter accumulated commissions captured across this completed cruise length ($):", "60.00");
-    if (commStr === null) return;
-    let comm = parseFloat(commStr);
-    if (isNaN(comm) || comm < 0) return alert("Numerical entries required.");
-    s.contract_profile.voyages.push({
-        id: 'voy_' + Date.now(),
-        dateStr: new Date().toLocaleDateString('en-CA'),
-        estimatedCommission: comm
-    });
-    saveState();
-    renderContractTracker();
-}
-
 async function manageDryDockOverride() {
     let active = await openUConfirm("Shipyard Exception Guard", "Is the vessel currently occupying a non-passenger dry dock period status context block?");
     s.contract_profile.dryDockActive = active;
@@ -3206,7 +3197,8 @@ function setPaycheckWizardType(type) {
             let statusDot = "🟡";
             
             let comm = v.commissions || { salesEfficiency: 0, dreamsStudio: 0 };
-            let vTotal = (parseFloat(comm.salesEfficiency) || 0) + (parseFloat(comm.dreamsStudio) || 0);
+            let vTotal = (parseFloat(comm.salesEfficiency) || 0) + (parseFloat(comm.dreamsStudio) || 0) + (parseFloat(comm.monthlyBonus) || 0);
+
             
             if (v.status === "paid") {
                 statusColor = "var(--success)";
@@ -3308,53 +3300,61 @@ function setPaycheckWizardType(type) {
 
 
     function openCommissionModal(vid) {
-        let v = s.contract_profile.voyages.find(x => x.voyageId === vid);
-        if (!v) return;
-        
-        if (v.status === "paid") {
-            alert("⚠️ This commission has already been sealed in a settled paycheck. Editing it will dynamically cascade and alter your historical total wealth analytics.");
-        }
+    let v = s.contract_profile.voyages.find(x => x.voyageId === vid);
+    if (!v) return;
 
-        document.getElementById('commVoyageId').value = vid;
-        document.getElementById('commVoyageLabel').innerText = `${v.ship} (${v.startDate} to ${v.endDate})`;
-        
-        let c = v.commissions || {};
-        document.getElementById('commSales').value = c.salesEfficiency || "";
-        document.getElementById('commDreams').value = c.dreamsStudio || "";
-        
-        document.getElementById('commissionModal').style.display = 'flex';
+    if (v.status === "paid") {
+        alert("⚠️ This commission has already been sealed in a settled paycheck. Editing it will dynamically cascade and alter your historical total wealth analytics.");
     }
 
-    function saveVoyageCommission() {
-        let vid = document.getElementById('commVoyageId').value;
-        let sales = parseFloat(document.getElementById('commSales').value) || 0;
-        let dreams = parseFloat(document.getElementById('commDreams').value) || 0;
-        
-        let vIndex = s.contract_profile.voyages.findIndex(x => x.voyageId === vid);
-        if (vIndex === -1) return;
-        
-        let oldTotal = (s.contract_profile.voyages[vIndex].commissions.salesEfficiency || 0) + 
-                       (s.contract_profile.voyages[vIndex].commissions.dreamsStudio || 0);
-        let newTotal = sales + dreams;
-        let diff = newTotal - oldTotal;
+    document.getElementById('commVoyageId').value = vid;
+    document.getElementById('commVoyageLabel').innerText = `${v.ship} (${v.startDate} to ${v.endDate})`;
 
-        s.contract_profile.voyages[vIndex].commissions.salesEfficiency = sales;
-        s.contract_profile.voyages[vIndex].commissions.dreamsStudio = dreams;
-        
-        if (s.contract_profile.voyages[vIndex].status === "pending") {
-            s.contract_profile.voyages[vIndex].status = "logged";
-        }
-        
-        // Retroactive Mathematical Cascade (Phase 3 Prep)
-        if (s.contract_profile.voyages[vIndex].status === "paid") {
-            s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + diff;
-        }
+    let c = v.commissions || {};
+    document.getElementById('commSales').value = c.salesEfficiency || "";
+    document.getElementById('commDreams').value = c.dreamsStudio || "";
+    document.getElementById('commBonus').value = c.monthlyBonus || "";
 
-        saveState();
-        document.getElementById('commissionModal').style.display = 'none';
-        renderVoyageLedger();
-        if (typeof renderDashboard === 'function') renderDashboard();
+    document.getElementById('commissionModal').style.display = 'flex';
+}
+
+function saveVoyageCommission() {
+    let vid = document.getElementById('commVoyageId').value;
+    let sales = parseFloat(document.getElementById('commSales').value) || 0;
+    let dreams = parseFloat(document.getElementById('commDreams').value) || 0;
+    let bonus = parseFloat(document.getElementById('commBonus').value) || 0;
+
+    let vIndex = s.contract_profile.voyages.findIndex(x => x.voyageId === vid);
+    if (vIndex === -1) return;
+
+    let oldTotal = (parseFloat(s.contract_profile.voyages[vIndex].commissions.salesEfficiency) || 0) + 
+                   (parseFloat(s.contract_profile.voyages[vIndex].commissions.dreamsStudio) || 0) +
+                   (parseFloat(s.contract_profile.voyages[vIndex].commissions.monthlyBonus) || 0);
+    let newTotal = sales + dreams + bonus;
+    let diff = newTotal - oldTotal;
+
+    if (!s.contract_profile.voyages[vIndex].commissions) {
+        s.contract_profile.voyages[vIndex].commissions = {};
     }
+
+    s.contract_profile.voyages[vIndex].commissions.salesEfficiency = sales;
+    s.contract_profile.voyages[vIndex].commissions.dreamsStudio = dreams;
+    s.contract_profile.voyages[vIndex].commissions.monthlyBonus = bonus;
+
+    if (s.contract_profile.voyages[vIndex].status === "pending") {
+        s.contract_profile.voyages[vIndex].status = "logged";
+    }
+
+    // Retroactive Mathematical Cascade (Phase 3 Prep)
+    if (s.contract_profile.voyages[vIndex].status === "paid") {
+        s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + diff;
+    }
+
+    saveState();
+    document.getElementById('commissionModal').style.display = 'none';
+    renderVoyageLedger();
+    if (typeof renderDashboard === 'function') renderDashboard();
+}
 
     function deleteVoyage(vid) {
         let v = s.contract_profile.voyages.find(x => x.voyageId === vid);
