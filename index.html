@@ -1025,6 +1025,25 @@
                 <button class="btn-secondary" onclick="fetchLiveFX()">🔄 Auto-Fetch from Market</button>
             </div>
 
+            <div class="vault-card" style="border-color:#38bdf8;">
+                <div class="title" style="color:#38bdf8;">🚢 Voyage Itinerary Engine</div>
+                <p style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">
+                    Paste your AI-generated JSON schedule here. The app will instantly map your exact ports, sea days, and commission slots for the entire contract.
+                </p>
+                <button class="btn-secondary" onclick="document.getElementById('jsonInputArea').style.display='block'" style="margin-bottom:10px;">
+                    + Import New Voyage JSON
+                </button>
+                
+                <div id="jsonInputArea" style="display:none; margin-top:10px;">
+                    <textarea id="voyageJsonInput" rows="6" style="width:100%; background:var(--bg-color); color:var(--text); border:1px solid var(--panel-border); border-radius:6px; padding:8px; font-family:monospace; font-size:10px;" placeholder="Paste JSON array here..."></textarea>
+                    <div style="display:flex; gap:10px; margin-top:10px;">
+                        <button class="btn-action" style="flex:1; padding:10px; font-size:12px;" onclick="importVoyageJSON()">Parse & Save</button>
+                        <button class="btn-secondary" style="flex:1; margin-top:0;" onclick="document.getElementById('jsonInputArea').style.display='none'; document.getElementById('voyageJsonInput').value='';">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            
             <div class="vault-card">
                 <div class="title" style="color:var(--success);">Data Sovereignty</div>
                 <button class="btn-secondary" onclick="exportData()" style="color:var(--text);">💾 Export JSON Backup</button>
@@ -3077,6 +3096,61 @@ function setPaycheckWizardType(type) {
     function openDiagnosticsModal() {
         calculateRunwayDiagnostics();
         document.getElementById('diagnosticsModal').style.display = 'flex';
+    }
+
+    // ==========================================
+    // --- VOYAGE COMMAND CENTER (PHASE 2) ---
+    // ==========================================
+
+    function importVoyageJSON() {
+        let input = document.getElementById('voyageJsonInput').value;
+        if (!input) return alert("Please paste the JSON payload first.");
+        
+        try {
+            let data = JSON.parse(input);
+            if (!Array.isArray(data)) throw new Error("JSON must be a structural array.");
+
+            // 1. Ensure database pathway exists
+            if (!s.contract_profile) s.contract_profile = {};
+            if (!s.contract_profile.voyages) s.contract_profile.voyages = [];
+
+            // 2. Safely merge or inject voyages
+            let addedCount = 0;
+            data.forEach(newVoyage => {
+                let existingIndex = s.contract_profile.voyages.findIndex(v => v.voyageId === newVoyage.voyageId);
+                
+                if (existingIndex >= 0) {
+                    // Update existing itinerary if routes change, but DO NOT overwrite entered commissions
+                    s.contract_profile.voyages[existingIndex].itinerary = newVoyage.itinerary;
+                    s.contract_profile.voyages[existingIndex].startDate = newVoyage.startDate;
+                    s.contract_profile.voyages[existingIndex].endDate = newVoyage.endDate;
+                    s.contract_profile.voyages[existingIndex].length = newVoyage.length;
+                    s.contract_profile.voyages[existingIndex].ship = newVoyage.ship;
+                } else {
+                    // Inject fresh voyage
+                    newVoyage.commissions = { salesEfficiency: 0, dreamsStudio: 0 };
+                    newVoyage.status = "pending"; 
+                    s.contract_profile.voyages.push(newVoyage);
+                    addedCount++;
+                }
+            });
+
+            // 3. Keep chronological order
+            s.contract_profile.voyages.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+            saveState();
+            alert(`✅ Success! ${addedCount} voyages successfully mapped to your timeline.`);
+            
+            // Clean up UI
+            document.getElementById('voyageJsonInput').value = "";
+            document.getElementById('jsonInputArea').style.display = 'none';
+            
+            // Re-render UI if on logs tab
+            if (typeof renderVoyageLedger === 'function') renderVoyageLedger();
+            
+        } catch (e) {
+            alert("❌ Invalid JSON format. Error: " + e.message);
+        }
     }
 
     // ==========================================
