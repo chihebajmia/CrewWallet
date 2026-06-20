@@ -3371,6 +3371,7 @@ function setPaycheckWizardType(type) {
             
             let comm = v.commissions || { salesEfficiency: 0, dreamsStudio: 0 };
             let vTotal = (parseFloat(comm.salesEfficiency) || 0) + (parseFloat(comm.dreamsStudio) || 0);
+            let vExp = parseFloat(v.expenses) || 0;
             let bonusBadge = comm.hasMonthlyBonus ? `<span style="margin-left:6px; padding:2px 6px; background:rgba(168, 85, 247, 0.1); color:#a855f7; border-radius:4px; font-size:8px; font-weight:bold; letter-spacing:0.5px;">+ MONTHLY BONUS</span>` : "";
             
             if (v.status === "paid") {
@@ -3387,6 +3388,15 @@ function setPaycheckWizardType(type) {
                 totalComm += vTotal;
             }
 
+            let metricsHtml = `<strong style="font-size:13px; color:var(--text);">$${vTotal.toFixed(2)}</strong>`;
+            if (v.status === "paid" || v.status === "logged") {
+                metricsHtml = `
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
+                    <strong style="font-size:12px; color:var(--success);">+ $${vTotal.toFixed(2)}</strong>
+                    <strong style="font-size:12px; color:var(--danger);">- $${vExp.toFixed(2)}</strong>
+                </div>`;
+            }
+
             html += `
             <div style="background:var(--vault-bg); border-radius:8px; border:1px solid var(--panel-border); margin-bottom:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
                 <div style="padding:10px 12px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--panel-border); background:rgba(0,0,0,0.01);">
@@ -3398,9 +3408,10 @@ function setPaycheckWizardType(type) {
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:9px; font-weight:bold; color:${statusColor}; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">${statusDot} ${statusText}</div>
-                        <strong style="font-size:13px; color:var(--text);">$${vTotal.toFixed(2)}</strong>
+                        ${metricsHtml}
                     </div>
                 </div>
+
                 <div style="padding:8px 12px; display:flex; gap:8px; align-items:center; background:var(--bg-color);">
                     <button style="flex:1; padding:6px; font-size:10px; border-radius:6px; border:1px solid var(--panel-border); background:var(--vault-bg); color:var(--text); cursor:pointer; font-weight:bold;" onclick="openCommissionModal('${v.voyageId}')">
                         ${v.status === 'pending' ? '📝 Comm' : '✏️ Comm'}
@@ -6464,28 +6475,27 @@ function processPaycheck() {
     }
 
     function executeSnsBrightwellSweep(sweepAmt, settlementContext) {
-        // Charge core funding pipeline ledger vault
         s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) - sweepAmt;
         
-        // Push verification receipt to income logging ledger timeline
         let timestampId = "sns_settle_" + Date.now();
         s.income_logs.unshift({
             id: timestampId,
-            date: new Date().toLocaleDateString("en-CA"),
+            date: new Date().toLocaleDateString('en-CA'),
             amount: sweepAmt,
-            source: "custom",
-            wallet: "Brightwell Card",
-            desc: "✅ S&S Tab Cleared: $" + sweepAmt.toFixed(2) + " [" + settlementContext + "]",
+            source: 'paycheck', 
+            wallet: 'Brightwell Settlement',
+            desc: "🚢 Sail & Sign Auto-Sweep [" + settlementContext + "]",
             isSnsSettlementRecord: true,
+            priorTabState: parseFloat(s.sail_and_sign.tab) || 0,
             restoredTabAmount: sweepAmt,
             restoredFolioBackup: [...(s.sail_and_sign.active_folio || [])]
         });
 
-        // Flush running totals clean
         s.sail_and_sign.tab = 0;
         s.sail_and_sign.active_folio = [];
         saveState();
     }
+
 
     async function depositSnsCashPrompt() {
         let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
@@ -6549,11 +6559,80 @@ function processPaycheck() {
 
     async function endVoyageSns() {
         let currentTab = parseFloat(s.sail_and_sign.tab) || 0;
-        let confirmAction = await openUConfirm("Turnaround Day Reset", "Clear Sail & Sign slate for this voyage? This sweeps outstanding balances ($" + currentTab.toFixed(2) + ") from Brightwell.");
-        if (confirmAction) {
-            executeSnsBrightwellSweep(currentTab, "Voyage Turnaround Clear");
+        
+        let confirmAction = await openUConfirm(
+            "Turnaround Day Execution", 
+            "This calculates total voyage liability, locks it to the active cruise, and wipes the Folio. Prepaid S&S credit will cleanly carry over."
+        );
+        if (!confirmAction) return;
+
+        // 1. Calculate Total Voyage Liability & Find Active Voyage
+        let todayD = new Date();
+        let todayStr = new Date(todayD.getTime() - (todayD.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        
+        let voyages = (s.contract_profile && s.contract_profile.voyages) ? s.contract_profile.voyages : [];
+        let activeVoyage = voyages.find(v => todayStr >= v.startDate && todayStr <= v.endDate);
+        let totalLiability = 0;
+        
+        if (activeVoyage) {
+            let vStart = activeVoyage.startDate;
+            let vEnd = activeVoyage.endDate;
+            
+            // Sweep all onboard archives + today's current logs to capture S&S, Cash Ashore, and Brightwell Ashore
+            let allLogs = [...(s.history.onboard.archive || []), { date: todayStr, logs: s.history.onboard.current || [] }];
+            
+            allLogs.forEach(day => {
+                let cleanDateStr = day.date.replace(' (Today)', '');
+                let dDate = new Date(cleanDateStr);
+                if (!isNaN(dDate.getTime())) {
+                    let dDateStr = new Date(dDate.getTime() - (dDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                    if (dDateStr >= vStart && dDateStr <= vEnd) {
+                        (day.logs || []).forEach(l => {
+                            // Exclude bank fees/settlements to prevent double-counting S&S sweeps
+                            if (l.category !== "🏦 Financial & Fees" && !l.isSnsSettlementRecord) {
+                                totalLiability += parseFloat(l.amount) || 0;
+                            }
+                        });
+                    }
+                }
+            });
+            activeVoyage.expenses = totalLiability;
+        } else {
+            alert("⚠️ No active voyage found matching today's date. Liability was not assigned to a specific cruise.");
         }
+
+        // 2. The Smart Carryover & Settlement Math
+        let timestampId = "sns_settle_" + Date.now();
+        let logEntry = {
+            id: timestampId,
+            date: new Date().toLocaleDateString('en-CA'),
+            source: 'paycheck', 
+            wallet: 'Brightwell Settlement',
+            isSnsSettlementRecord: true,
+            priorTabState: currentTab, 
+            restoredFolioBackup: [...(s.sail_and_sign.active_folio || [])]
+        };
+
+        if (currentTab > 0) {
+            // Hard deduction from Brightwell for the exact debt
+            s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) - currentTab;
+            logEntry.amount = currentTab;
+            logEntry.desc = "🚢 S&S Debt Settled [Voyage Turnaround]";
+            s.sail_and_sign.tab = 0; 
+        } else {
+            // Carryover the credit. No Brightwell deduction. Tab remains perfectly intact.
+            logEntry.amount = 0;
+            logEntry.desc = "🚢 S&S Folio Archival [Credit Carried Over]";
+        }
+
+        s.income_logs.unshift(logEntry);
+        s.sail_and_sign.active_folio = [];
+        
+        saveState();
+        if (typeof renderVoyageLedger === 'function') renderVoyageLedger();
+        alert(activeVoyage ? `Voyage Locked! Total Liability: $${totalLiability.toFixed(2)}` : "Folio wiped and credit carried over.");
     }
+
 
     async function logGhostHoldPrompt() {
         let amtStr = await openUPrompt("Log Pre-Auth Hold", "Enter holding hold valuation verification fee amount ($):", "2.50");
@@ -6685,21 +6764,32 @@ async function deleteIncome(index) {
     let c = await openUConfirm("Delete Income", "Delete this record and reverse its effect on your balances?");
     if (!c) return;
 
-    /* SAIL & SIGN SETTLEMENT REVERSAL ENGINE */
-    if (log.isSnsSettlementRecord) {
-        s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + parseFloat(log.restoredTabAmount);
-        s.sail_and_sign.tab = parseFloat(log.restoredTabAmount);
-        s.sail_and_sign.active_folio = log.restoredFolioBackup || [];
-        s.income_logs.splice(index, 1);
-        saveState();
-        if (document.getElementById('tab-dash').classList.contains('active')) {
-            renderDashboard();
-        } else {
-            renderContractTracker();
-            renderIncomeLogs();
+        /* SAIL & SIGN SETTLEMENT REVERSAL ENGINE */
+        if (log.isSnsSettlementRecord) {
+            // Reverse Brightwell deduction
+            s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + (parseFloat(log.amount) || parseFloat(log.restoredTabAmount) || 0);
+            
+            // Perfect Tab State Reversal
+            if (log.priorTabState !== undefined) {
+                s.sail_and_sign.tab = log.priorTabState;
+            } else {
+                s.sail_and_sign.tab = parseFloat(log.restoredTabAmount) || 0; // Phase 1 Legacy Fallback
+            }
+            
+            s.sail_and_sign.active_folio = log.restoredFolioBackup || [];
+            s.income_logs.splice(index, 1);
+            
+            saveState();
+            if (document.getElementById('tab-dash').classList.contains('active')) {
+                renderDashboard();
+            } else {
+                renderContractTracker();
+                renderIncomeLogs();
+                if (typeof renderVoyageLedger === 'function') renderVoyageLedger();
+            }
+            return;
         }
-        return;
-    }
+
 
     if (log.source === 'paycheck') {
         let opMatch = log.desc.match(/Op: \$([0-9.]+)/);
