@@ -1371,10 +1371,30 @@
             <div id="pwMilestoneBadge" style="display:block; text-align:center; font-size:11px; color:var(--accent); font-weight:bold; background:rgba(56,189,248,0.1); padding:6px; border-radius:8px; margin-bottom:12px; border:1px dashed var(--accent);">
                 Targeting: Milestone 1
             </div>
+
+            <div id="pwAnchorBox" style="display:none; background:rgba(16, 185, 129, 0.05); border:1px solid rgba(16, 185, 129, 0.3); border-radius:8px; padding:10px; margin-bottom:15px;">
+                <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px; font-weight:bold;">Ledger Anchor (Cutoff: <span id="pwCutoffLabel"></span>)</div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span style="font-size:11px; color:var(--text);">Base Pay:</span>
+                    <strong id="pwBasePay" style="font-size:11px; color:var(--text);">$0.00</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span style="font-size:11px; color:var(--text);">Logged Commissions (<span id="pwCommCount">0</span>):</span>
+                    <strong id="pwPendingComm" style="font-size:11px; color:#38bdf8;">$0.00</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; border-top:1px dashed rgba(255,255,255,0.1); padding-top:4px; margin-top:4px;">
+                    <span style="font-size:11px; color:var(--text-muted);">Expected Minimum:</span>
+                    <strong id="pwExpectedMin" style="font-size:11px; color:var(--success);">$0.00</strong>
+                </div>
+            </div>
             
             <input type="number" id="pwGross" placeholder="Gross Pay (USD)" style="font-size:20px; font-weight:bold; text-align:center;" inputmode="decimal" oninput="calcPaycheck('gross', null)">
             
-            <div style="margin-top:20px; background:var(--vault-bg); padding:12px; border-radius:8px; border:1px solid var(--panel-border);">
+            <div id="pwDeltaBox" style="display:none; text-align:right; font-size:10px; color:#a855f7; margin-top:4px; margin-bottom:10px; font-weight:bold;">
+                ↳ Physical Sales / Adjustments (Delta): $<span id="pwDeltaAmt">0.00</span>
+            </div>
+
+            <div style="margin-top:15px; background:var(--vault-bg); padding:12px; border-radius:8px; border:1px solid var(--panel-border);">
                 <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; align-items:center;">
                     <span style="color:var(--danger); display:flex; align-items:center; gap:4px;">
                         🚨 STB Auto-Wire 
@@ -1387,11 +1407,21 @@
 
                 <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; padding-top:8px; border-top:1px dashed var(--panel-border); align-items:center;">
                     <span style="color:#38bdf8; display:flex; align-items:center; gap:4px;">
-                        📈 Savings/IBKR 
+                        📈 Savings TND 
                         <input type="number" id="pwSavPct" value="15" style="width:45px; padding:4px; font-size:12px; text-align:center; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="calcPaycheck('pct', 'sav')">%
                     </span>
                     <div style="display:flex; align-items:center; gap:4px; font-size:13px; font-weight:bold;">
                         $ <input type="number" id="pwSavAmt" style="width:60px; padding:4px; font-size:12px; text-align:right; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="calcPaycheck('amt', 'sav')">
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; padding-top:8px; border-top:1px dashed var(--panel-border); align-items:center;">
+                    <span style="color:#a855f7; display:flex; align-items:center; gap:4px;">
+                        🦉 Wise USD
+                        <input type="number" id="pwWisePct" value="0" style="width:45px; padding:4px; font-size:12px; text-align:center; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="calcPaycheck('pct', 'wise')">%
+                    </span>
+                    <div style="display:flex; align-items:center; gap:4px; font-size:13px; font-weight:bold;">
+                        $ <input type="number" id="pwWiseAmt" style="width:60px; padding:4px; font-size:12px; text-align:right; background:#0f172a; border:1px solid var(--panel-border); color:var(--text); border-radius:6px;" oninput="calcPaycheck('amt', 'wise')">
                     </div>
                 </div>
                 
@@ -1412,6 +1442,7 @@
             </div>
         </div>
     </div>
+
 
 
         <div class="modal-overlay" id="ibkrModal">
@@ -2722,20 +2753,37 @@ async function updatePositionProfile() {
     }
 
 
+let currentPaycheckContext = null;
+
 function setPaycheckWizardType(type) {
     activeWizardType = type;
     let btnContract = document.getElementById('pwBtnContract');
     let btnAdHoc = document.getElementById('pwBtnAdHoc');
     if (type === 'contract') {
-        btnContract.style.background = 'var(--accent)'; btnContract.style.color = '#0f172a';
+        btnContract.style.background = 'var(--accent)';
+        btnContract.style.color = '#0f172a';
         btnAdHoc.style.background = 'transparent'; btnAdHoc.style.color = 'var(--text-muted)';
         document.getElementById('pwTitle').innerText = "🚢 Carnival Contract Paycheck Wizard";
+        if (currentPaycheckContext) {
+            let anchor = document.getElementById('pwAnchorBox');
+            if (anchor) anchor.style.display = 'block';
+        }
     } else {
         btnAdHoc.style.background = 'var(--accent)'; btnAdHoc.style.color = '#0f172a';
-        btnContract.style.background = 'transparent'; btnContract.style.color = 'var(--text-muted)';
+        btnContract.style.background = 'transparent';
+        btnContract.style.color = 'var(--text-muted)';
         document.getElementById('pwTitle').innerText = "🔵 Random Ad-Hoc Revenue Log";
+        let anchor = document.getElementById('pwAnchorBox');
+        if (anchor) anchor.style.display = 'none';
+        let delta = document.getElementById('pwDeltaBox');
+        if (delta) delta.style.display = 'none';
+    }
+    // Safely trigger live calculation if the modal is actively open
+    if (typeof calcPaycheck === 'function' && document.getElementById('pwGross')) {
+        calcPaycheck('gross', null);
     }
 }
+
 
     
     function populateCategories() {
@@ -5798,101 +5846,196 @@ if(document.getElementById('advVapeBrand')) {
     }
 
 function openPaycheckModal() {
-    document.getElementById('pwGross').value = ''; 
-    document.getElementById('pwLoanAmt').value = ''; 
-    document.getElementById('pwSavAmt').value = ''; 
+    document.getElementById('pwGross').value = '';
+    document.getElementById('pwLoanAmt').value = '';
+    document.getElementById('pwSavAmt').value = '';
+    document.getElementById('pwWiseAmt').value = '';
     document.getElementById('pwOpAmt').value = '';
+    
+    document.getElementById('pwLoanPct').value = s.contract_profile.lastLoanPct !== undefined ? s.contract_profile.lastLoanPct : 40;
+    document.getElementById('pwSavPct').value = s.contract_profile.lastSavPct !== undefined ? s.contract_profile.lastSavPct : 15;
+    document.getElementById('pwWisePct').value = s.contract_profile.lastWisePct !== undefined ? s.contract_profile.lastWisePct : 0;
+    document.getElementById('pwOpPct').value = s.contract_profile.lastOpPct !== undefined ? s.contract_profile.lastOpPct : 45;
+
+    let milestones = typeof generateContractMilestones === 'function' ? generateContractMilestones() : [];
+    let nextPending = typeof getNextPendingMilestone === 'function' ? getNextPendingMilestone(milestones) : null;
+    
+    currentPaycheckContext = null;
+    let anchor = document.getElementById('pwAnchorBox');
+    let deltaBox = document.getElementById('pwDeltaBox');
+    if (anchor) anchor.style.display = 'none';
+    if (deltaBox) deltaBox.style.display = 'none';
     
     if (s.mode === 'onboard') {
         document.getElementById('pwToggleContainer').style.display = 'flex';
-        let milestones = generateContractMilestones();
-        let nextPending = getNextPendingMilestone(milestones);
         if (nextPending) {
             document.getElementById('pwMilestoneBadge').style.display = 'block';
             document.getElementById('pwMilestoneBadge').innerText = `🎯 Target Allocation Slot: Milestone ${nextPending.index + 1} (${nextPending.paydayDateStr})`;
-            setPaycheckWizardType('contract');
+            
+            // --- DELTA RECONCILIATION PREP ---
+            let currCutoffD = new Date(nextPending.cutoffMondayStr + "T23:59:59");
+            let prevCutoffD = nextPending.startDateStr ? new Date(nextPending.startDateStr + "T23:59:59") : new Date("2000-01-01T00:00:00");
+
+            let voyagesToClear = [];
+            let actualLoggedCommTotal = 0;
+            
+            let voyages = (s.contract_profile && s.contract_profile.voyages) ? s.contract_profile.voyages : [];
+            voyages.forEach(v => {
+                let vEnd = new Date(v.endDate + "T12:00:00");
+                if (vEnd > prevCutoffD && vEnd <= currCutoffD) {
+                    if (v.status === 'logged') {
+                        let c = v.commissions || {};
+                        actualLoggedCommTotal += (parseFloat(c.salesEfficiency) || 0) + (parseFloat(c.dreamsStudio) || 0) + (parseFloat(c.monthlyBonus) || 0); 
+                        voyagesToClear.push(v.voyageId);
+                    }
+                }
+            });
+
+            let basePay = nextPending.isDryDock ? nextPending.projectedTotal : (nextPending.projectedTotal - nextPending.pendingComm);
+
+            currentPaycheckContext = {
+                milestone: nextPending,
+                basePay: basePay,
+                loggedCommTotal: actualLoggedCommTotal,
+                voyagesToClear: voyagesToClear
+            };
+
+            document.getElementById('pwCutoffLabel').innerText = nextPending.cutoffMondayStr;
+            document.getElementById('pwBasePay').innerText = "$" + basePay.toFixed(2);
+            document.getElementById('pwCommCount').innerText = voyagesToClear.length;
+            document.getElementById('pwPendingComm').innerText = "$" + actualLoggedCommTotal.toFixed(2);
+            document.getElementById('pwExpectedMin').innerText = "$" + (basePay + actualLoggedCommTotal).toFixed(2);
+
+            if (typeof setPaycheckWizardType === 'function') setPaycheckWizardType('contract');
         } else {
-            setPaycheckWizardType('adhoc');
+            if (typeof setPaycheckWizardType === 'function') setPaycheckWizardType('adhoc');
         }
     } else {
         document.getElementById('pwToggleContainer').style.display = 'none';
         document.getElementById('pwMilestoneBadge').style.display = 'none';
-        setPaycheckWizardType('adhoc');
+        if (typeof setPaycheckWizardType === 'function') setPaycheckWizardType('adhoc');
     }
+    
     document.getElementById('paycheckModal').style.display = 'flex';
 }
 
 function calcPaycheck(source, tgt) {
     let g = parseFloat(document.getElementById('pwGross').value) || 0;
-    let lP = parseFloat(document.getElementById('pwLoanPct').value) || 0; 
-    let sP = parseFloat(document.getElementById('pwSavPct').value) || 0; 
+    let lP = parseFloat(document.getElementById('pwLoanPct').value) || 0;
+    let sP = parseFloat(document.getElementById('pwSavPct').value) || 0;
+    let wP = parseFloat(document.getElementById('pwWisePct').value) || 0;
     let oP = parseFloat(document.getElementById('pwOpPct').value) || 0;
     
     if (source === 'gross' || source === 'pct') {
-        document.getElementById('pwLoanAmt').value = (g * (lP / 100)).toFixed(2); 
-        document.getElementById('pwSavAmt').value = (g * (sP / 100)).toFixed(2); 
+        document.getElementById('pwLoanAmt').value = (g * (lP / 100)).toFixed(2);
+        document.getElementById('pwSavAmt').value = (g * (sP / 100)).toFixed(2);
+        document.getElementById('pwWiseAmt').value = (g * (wP / 100)).toFixed(2);
         document.getElementById('pwOpAmt').value = (g * (oP / 100)).toFixed(2);
     } else if (source === 'amt' && g > 0) {
-        let lA = parseFloat(document.getElementById('pwLoanAmt').value) || 0; 
-        let sA = parseFloat(document.getElementById('pwSavAmt').value) || 0; 
+        let lA = parseFloat(document.getElementById('pwLoanAmt').value) || 0;
+        let sA = parseFloat(document.getElementById('pwSavAmt').value) || 0;
+        let wA = parseFloat(document.getElementById('pwWiseAmt').value) || 0;
         let oA = parseFloat(document.getElementById('pwOpAmt').value) || 0;
         
-        if (tgt === 'loan') document.getElementById('pwLoanPct').value = ((lA / g) * 100).toFixed(1); 
-        if (tgt === 'sav') document.getElementById('pwSavPct').value = ((sA / g) * 100).toFixed(1); 
+        if (tgt === 'loan') document.getElementById('pwLoanPct').value = ((lA / g) * 100).toFixed(1);
+        if (tgt === 'sav') document.getElementById('pwSavPct').value = ((sA / g) * 100).toFixed(1);
+        if (tgt === 'wise') document.getElementById('pwWisePct').value = ((wA / g) * 100).toFixed(1);
         if (tgt === 'op') document.getElementById('pwOpPct').value = ((oA / g) * 100).toFixed(1);
+    }
+    
+    let deltaBox = document.getElementById('pwDeltaBox');
+    if (activeWizardType === 'contract' && currentPaycheckContext && g > 0) {
+        let expected = currentPaycheckContext.basePay + currentPaycheckContext.loggedCommTotal;
+        let delta = g - expected;
+        document.getElementById('pwDeltaAmt').innerText = delta.toFixed(2);
+        if (deltaBox) deltaBox.style.display = 'block';
+    } else {
+        if (deltaBox) deltaBox.style.display = 'none';
     }
 }
 
 function processPaycheck() {
     let g = parseFloat(document.getElementById('pwGross').value) || 0;
-    let oA = parseFloat(document.getElementById('pwOpAmt').value) || 0; 
-    let lA = parseFloat(document.getElementById('pwLoanAmt').value) || 0; 
+    let oA = parseFloat(document.getElementById('pwOpAmt').value) || 0;
+    let lA = parseFloat(document.getElementById('pwLoanAmt').value) || 0;
     let sA = parseFloat(document.getElementById('pwSavAmt').value) || 0;
-    // V2 Radar: Save deduction preferences automatically
+    let wA = parseFloat(document.getElementById('pwWiseAmt').value) || 0;
+
     s.contract_profile.lastLoanPct = parseFloat(document.getElementById('pwLoanPct').value) || 0;
     s.contract_profile.lastSavPct = parseFloat(document.getElementById('pwSavPct').value) || 0;
+    s.contract_profile.lastWisePct = parseFloat(document.getElementById('pwWisePct').value) || 0;
     s.contract_profile.lastOpPct = parseFloat(document.getElementById('pwOpPct').value) || 0;
 
     if (g <= 0) return alert("Enter a valid gross pay.");
-    if (oA > 0) s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + oA;
-    
+
     let pId = 'pc_' + Date.now();
     if (!s.transit_queue) s.transit_queue = [];
+    
     if (lA > 0) s.transit_queue.push({ type: 'stb', amount: lA, date: new Date().toLocaleDateString('en-CA'), parentId: pId });
     if (sA > 0) s.transit_queue.push({ type: 'savings', amount: sA, date: new Date().toLocaleDateString('en-CA'), parentId: pId });
-    
-    let detailsStr = `Op: $${oA.toFixed(2)} (Cleared) | STB: $${lA.toFixed(2)} (Pending) | Sav: $${sA.toFixed(2)} (Pending)`;
-    
-    let logEntry = { 
-        id: pId,
-        date: new Date().toLocaleDateString('en-CA'), 
-        amount: g, 
-        source: 'paycheck', 
-        wallet: 'SPLIT ROUTING', 
-        desc: (activeWizardType === 'contract' ? '🚢 Regular Contract Payday - ' : '🔵 Ad-Hoc Paycheck - ') + detailsStr,
-        isContractPayday: (activeWizardType === 'contract' && s.mode === 'onboard'),
-        positionTitle: s.contract_profile.positionTitle,
-        baseSalarySnapshot: s.contract_profile.baseSalary
-    };
+    if (wA > 0) s.transit_queue.push({ type: 'wise', amount: wA, date: new Date().toLocaleDateString('en-CA'), parentId: pId });
 
-    if (logEntry.isContractPayday) {
+    if (oA > 0) s.vault.brightwell = (parseFloat(s.vault.brightwell) || 0) + oA;
+    
+    let detailsStr = `Op: $${oA.toFixed(2)} | STB: $${lA.toFixed(2)} | Sav: $${sA.toFixed(2)} | Wise: $${wA.toFixed(2)}`;
+    
+    let delta = 0;
+    let basePaySnapshot = 0;
+    let positionSnapshot = s.contract_profile.positionTitle || "Contract Base";
+    let isContractPayday = activeWizardType === 'contract';
+
+    if (isContractPayday && currentPaycheckContext) {
+        basePaySnapshot = currentPaycheckContext.basePay;
+        delta = g - (currentPaycheckContext.basePay + currentPaycheckContext.loggedCommTotal);
+        detailsStr += ` | Delta: $${delta.toFixed(2)}`;
+        
+        currentPaycheckContext.voyagesToClear.forEach(vid => {
+            let v = s.contract_profile.voyages.find(x => x.voyageId === vid);
+            if (v && v.status === 'logged') {
+                v.status = 'paid';
+                v.linkedPaycheckId = pId;
+            }
+        });
+    } else if (isContractPayday) {
+        // Fallback for Phase 1 legacy clearing (if context failed)
         let milestones = generateContractMilestones();
         let targetMilestone = getNextPendingMilestone(milestones);
         if (targetMilestone) {
             let cutoffDate = new Date(targetMilestone.cutoffMondayStr + 'T23:59:59');
-            s.contract_profile.voyages = (s.contract_profile.voyages || []).filter(v => {
-                return new Date(v.dateStr) > cutoffDate;
-            });
+            s.contract_profile.voyages = (s.contract_profile.voyages || []).filter(v => { return new Date(v.dateStr) > cutoffDate; });
         }
     }
 
+    let logEntry = {
+        id: pId,
+        date: new Date().toLocaleDateString('en-CA'),
+        amount: g,
+        source: 'paycheck',
+        wallet: 'SPLIT ROUTING',
+        desc: (isContractPayday ? '🚢 Regular Contract Payday - ' : '🔵 Ad-Hoc Paycheck - ') + detailsStr,
+        isContractPayday: isContractPayday,
+        baseSalarySnapshot: basePaySnapshot,
+        positionTitle: positionSnapshot,
+        physicalSalesDelta: delta
+    };
+
+    if (isContractPayday && currentPaycheckContext) {
+        logEntry.clearedVoyages = currentPaycheckContext.voyagesToClear;
+        logEntry.loggedCommissionsTotal = currentPaycheckContext.loggedCommTotal;
+    }
+
     s.income_logs.unshift(logEntry);
-    saveState(); 
+    
+    saveState();
     document.getElementById('paycheckModal').style.display = 'none';
+    currentPaycheckContext = null;
     
     if (document.getElementById('tab-time').classList.contains('active')) {
         renderContractTracker();
         renderIncomeLogs();
+        if (typeof renderVoyageLedger === 'function') renderVoyageLedger();
+    } else if (document.getElementById('tab-dash').classList.contains('active')) {
+        renderDashboard();
     }
 }
 
