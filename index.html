@@ -7427,29 +7427,38 @@ async function deleteIncome(index) {
     
     function exportData() {
         // 1. Force the engine to calculate the latest dynamic True Runway math invisibly
-        calculateRunwayDiagnostics();
+        if (typeof calculateRunwayDiagnostics === 'function') calculateRunwayDiagnostics();
 
         // 2. Inject an "AI Translation Block" into the JSON before exporting
         s.llm_context = {
-            "vape_dynamic_earmark": document.getElementById('diagVape').innerText,
-            "core_capital_true_runway": document.getElementById('diagCore').innerText,
-            "core_allowance_pacing": document.getElementById('diagAllowance').innerText,
+            "vape_dynamic_earmark": document.getElementById('diagVape') ? document.getElementById('diagVape').innerText : "N/A",
+            "core_capital_true_runway": document.getElementById('diagCore') ? document.getElementById('diagCore').innerText : "N/A",
+            // FIXED: Updated to diagAllowanceA to match the new 4-Point Stress Test built in Phase 1
+            "core_allowance_pacing": document.getElementById('diagAllowanceA') ? document.getElementById('diagAllowanceA').innerText : "N/A",
             "architecture_rules": "Rule 1: Missions with target:0 are 'Open Ledgers' (e.g. Driving License), not budget violations. Rule 2: Vapes are dynamically earmarked from Core Capital, so their bypasses are completely accounted for."
         };
 
-        // 3. Generate the export file containing the AI translation
+        // 3. Generate the export file using an Industrial Blob (Bypasses mobile URL character limits)
         let dataStr = JSON.stringify(s);
-        let dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+        let blob = new Blob([dataStr], { type: "application/json" });
+        let dataUri = URL.createObjectURL(blob);
+        
         let exportFileDefaultName = 'CrewWalletMaster_Backup_' + new Date().toLocaleDateString().replace(/\//g, '-') + '.json';
         
         let linkElement = document.createElement('a');
         linkElement.setAttribute('href', dataUri);
         linkElement.setAttribute('download', exportFileDefaultName);
+        
+        // Required for strict mobile browser execution
+        document.body.appendChild(linkElement);
         linkElement.click();
+        document.body.removeChild(linkElement);
+        URL.revokeObjectURL(dataUri);
 
         // 4. Erase the translation block so it does not permanently bloat your live database
         delete s.llm_context;
     }
+
 
     
     function importData(event) {
