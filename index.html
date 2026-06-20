@@ -6490,7 +6490,6 @@ async function deleteIncome(index) {
         s.sail_and_sign.active_folio = log.restoredFolioBackup || [];
         s.income_logs.splice(index, 1);
         saveState();
-        
         if (document.getElementById('tab-dash').classList.contains('active')) {
             renderDashboard();
         } else {
@@ -6504,72 +6503,84 @@ async function deleteIncome(index) {
         let opMatch = log.desc.match(/Op: \$([0-9.]+)/);
         let stbMatch = log.desc.match(/STB: \$([0-9.]+)/);
         let savMatch = log.desc.match(/Sav: \$([0-9.]+)/);
-
+        let wiseMatch = log.desc.match(/Wise: \$([0-9.]+)/);
+        
         let oA = opMatch ? parseFloat(opMatch[1]) : 0;
         let lA = stbMatch ? parseFloat(stbMatch[1]) : 0;
         let sA = savMatch ? parseFloat(savMatch[1]) : 0;
+        let wA = wiseMatch ? parseFloat(wiseMatch[1]) : 0;
 
         s.vault.brightwell = Math.max(0, (parseFloat(s.vault.brightwell) || 0) - oA);
 
         if (s.transit_queue) {
-            if (lA > 0) {
-                let tIdx = s.transit_queue.findIndex(w => w.type === 'stb' && Math.abs(w.amount - lA) < 0.01);
-                if (tIdx > -1) s.transit_queue.splice(tIdx, 1);
-            }
-            if (sA > 0) {
-                let tIdx = s.transit_queue.findIndex(w => w.type === 'savings' && Math.abs(w.amount - sA) < 0.01);
-                if (tIdx > -1) s.transit_queue.splice(tIdx, 1);
+            if (log.id && log.id.startsWith('pc_')) {
+                // 1. Revert Phase 3 Pending Wires (STB, Savings, Wise) securely
+                s.transit_queue = s.transit_queue.filter(w => w.parentId !== log.id);
+            } else {
+                // 2. Fallback for Legacy Phase 1 Pending Wires
+                if (lA > 0) {
+                    let tIdx = s.transit_queue.findIndex(w => w.type === 'stb' && Math.abs(w.amount - lA) < 0.01);
+                    if (tIdx > -1) s.transit_queue.splice(tIdx, 1);
+                }
+                if (sA > 0) {
+                    let tIdx = s.transit_queue.findIndex(w => w.type === 'savings' && Math.abs(w.amount - sA) < 0.01);
+                    if (tIdx > -1) s.transit_queue.splice(tIdx, 1);
+                }
             }
         }
-    } 
-    else if (log.desc && log.desc.includes('✅ Wire Settled')) {
+        
+        // 3. Phase 3 Voyage Unlocking Engine
+        if (log.clearedVoyages && Array.isArray(log.clearedVoyages)) {
+            log.clearedVoyages.forEach(vid => {
+                let v = (s.contract_profile.voyages || []).find(x => x.voyageId === vid);
+                if (v && v.status === 'paid') {
+                    v.status = 'logged';
+                    delete v.linkedPaycheckId;
+                }
+            });
+        }
+
+    } else if (log.desc && log.desc.includes('✅ Wire Settled')) {
         if (log.wallet === 'STB Settlement') {
             s.loan.arrears = (parseFloat(s.loan.arrears) || 0) + parseFloat(log.amount);
         } else if (log.wallet === 'Savings' || log.wallet === 'savings') {
             s.vault.savings = Math.max(0, (parseFloat(s.vault.savings) || 0) - parseFloat(log.amount));
         }
-
         let match = log.desc.match(/Settled: \$([0-9.]+)/);
         if (match) {
             let origUSD = parseFloat(match[1]);
             let type = log.wallet === 'STB Settlement' ? 'stb' : 'savings';
             if (!s.transit_queue) s.transit_queue = [];
-            s.transit_queue.push({
-                type: type,
-                amount: origUSD,
-                date: log.date,
-                parentId: log.parentId
-            });
+            s.transit_queue.push({ type: type, amount: origUSD, date: log.date, parentId: log.parentId });
         }
-
         let routeName = "";
         if (log.wallet === 'STB Settlement') routeName = "Brightwell ➔ STB";
         else if (log.wallet === 'Savings' || log.wallet === 'savings') routeName = "Brightwell ➔ Savings TND";
         else if (log.wallet === 'WISE' || log.wallet === 'wise') routeName = "Brightwell ➔ Wise";
         else if (log.wallet === 'IBKR' || log.wallet === 'ibkr') routeName = "Wise ➔ IBKR";
-
+        
         if (s.history.transfers && routeName) {
             let tIdx = s.history.transfers.map(t => t.route).lastIndexOf(routeName);
             if (tIdx > -1) s.history.transfers.splice(tIdx, 1);
         }
-    }
-    else {
-        let targetWallet = log.wallet ? log.wallet.toLowerCase() : '';
-        if (s.vault[targetWallet] !== undefined) {
-            s.vault[targetWallet] = Math.max(0, (parseFloat(s.vault[targetWallet]) || 0) - parseFloat(log.amount));
+    } else {
+        if (log.wallet && log.wallet !== 'SPLIT ROUTING') {
+            s.vault[log.wallet] = Math.max(0, (parseFloat(s.vault[log.wallet]) || 0) - parseFloat(log.amount));
         }
     }
 
     s.income_logs.splice(index, 1);
     saveState();
-    
+
     if (document.getElementById('tab-dash').classList.contains('active')) {
         renderDashboard();
     } else {
         renderContractTracker();
         renderIncomeLogs();
+        if (typeof renderVoyageLedger === 'function') renderVoyageLedger();
     }
 }
+
 
 
     function toggleTransferFields() {
