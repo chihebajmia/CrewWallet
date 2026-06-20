@@ -924,7 +924,7 @@
                     <div style="background:rgba(250,204,21,0.05); padding:8px; border-radius:6px; border:1px solid rgba(250,204,21,0.1); font-size:11px; margin-bottom:10px;">
                         <div style="color:var(--text-muted); font-size:9px; text-transform:uppercase; font-weight:bold; letter-spacing:0.5px;">Pending Cutoff Queue</div>
                         <div style="display:flex; justify-content:space-between; margin-top:4px;">
-                            <span>Unlogged Commissions:</span>
+                            <span style="color:var(--text-muted); font-weight:bold;">Est. Pending Commissions:</span>
                             <strong id="uiPendingCommissionsText" style="color:var(--accent);">$0.00</strong>
                         </div>
                     </div>
@@ -2694,18 +2694,33 @@ async function updatePositionProfile() {
     renderContractTracker();
 }
 
-async function manageDryDockOverride() {
-    let active = await openUConfirm("Shipyard Exception Guard", "Is the vessel currently occupying a non-passenger dry dock period status context block?");
-    s.contract_profile.dryDockActive = active;
-    if (active) {
-        let start = await openUPrompt("Set Yard Inception Point", "Enter Dry Dock timeline initiation date (YYYY-MM-DD):", s.contract_profile.dryDockStart || "2027-01-10");
-        if (start) s.contract_profile.dryDockStart = start;
-        let dur = await openUPrompt("Set Execution Window Length", "Enter projected duration length block parameters (Days):", s.contract_profile.dryDockDuration || "20");
-        if (dur) s.contract_profile.dryDockDuration = parseInt(dur) || 20;
+    function manageDryDockOverride() {
+        if (s.contract_profile.dryDockActive) {
+            if (confirm("⚓ Dry Dock is currently ACTIVE. Do you want to REMOVE it and restore regular commissions?")) {
+                s.contract_profile.dryDockActive = false;
+                s.contract_profile.dryDockStart = null;
+                s.contract_profile.dryDockDuration = null;
+                saveState();
+                renderContractTracker();
+                if (typeof renderDeploymentRadar === 'function') renderDeploymentRadar();
+                return;
+            }
+        }
+        
+        let ds = prompt("Enter Dry Dock START DATE (YYYY-MM-DD):", s.contract_profile.dryDockStart || "");
+        if (!ds) return;
+        let dd = prompt("Enter Dry Dock DURATION in days:", s.contract_profile.dryDockDuration || "20");
+        if (!dd) return;
+        
+        s.contract_profile.dryDockActive = true;
+        s.contract_profile.dryDockStart = ds;
+        s.contract_profile.dryDockDuration = dd;
+        saveState();
+        renderContractTracker();
+        if (typeof renderDeploymentRadar === 'function') renderDeploymentRadar();
+        alert("Dry Dock applied successfully.");
     }
-    saveState();
-    renderContractTracker();
-}
+
 
 function setPaycheckWizardType(type) {
     activeWizardType = type;
