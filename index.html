@@ -6571,7 +6571,14 @@ function processPaycheck() {
         let todayStr = new Date(todayD.getTime() - (todayD.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
         
         let voyages = (s.contract_profile && s.contract_profile.voyages) ? s.contract_profile.voyages : [];
-        let activeVoyage = voyages.find(v => todayStr >= v.startDate && todayStr <= v.endDate);
+        // 100% strict target: Only select the cruise that is explicitly ending today.
+        // Fallback: If ending a day late, grab the most recent past cruise.
+        let activeVoyage = voyages.find(v => v.endDate === todayStr);
+        if (!activeVoyage) {
+            let pastVoyages = voyages.filter(v => v.endDate < todayStr).sort((a,b) => new Date(b.endDate) - new Date(a.endDate));
+            activeVoyage = pastVoyages.length > 0 ? pastVoyages[0] : null;
+        }
+
         let totalLiability = 0;
         
         if (activeVoyage) {
