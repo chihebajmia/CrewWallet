@@ -1050,6 +1050,22 @@
                 </div>
             </div>
 
+            <div class="vault-card" style="border-color:var(--accent);">
+                <div class="title" style="color:var(--accent);">🔮 Projection Engine Baselines</div>
+                <div class="input-row" style="margin-bottom:8px;">
+                    <span style="font-size:12px; width:100%;">Est. Cruise Comm ($):</span>
+                    <input type="number" id="setEstComm" onchange="updateSettingsParams()">
+                </div>
+                <div class="input-row">
+                    <span style="font-size:12px; width:100%;">Est. Monthly Bonus ($):</span>
+                    <input type="number" id="setEstBonus" onchange="updateSettingsParams()">
+                </div>
+                <div style="font-size:9px; color:var(--text-muted); margin-top:6px;">
+                    These values predict future paychecks. The Cruise Comm will automatically be overridden by your true average once you log actual data.
+                </div>
+            </div>
+
+
             <div class="vault-card">
                 <div class="title">Mode & Limits</div>
                 <select id="setMode" onchange="changeMode()" style="margin-bottom:10px;">
@@ -2619,9 +2635,10 @@ function getNextPendingMilestone(milestonesList) {
 
         let voyages = (s.contract_profile && s.contract_profile.voyages) ? s.contract_profile.voyages : [];
         
-        // 1. Dynamic Average vs $40.00 Baseline Rule
+        // 1. Dynamic Average vs Baseline Rule
         let loggedV = voyages.filter(v => v.status === 'paid' || v.status === 'logged');
-        let avgComm = 40.00; 
+        let avgComm = s.settings.estCruiseComm !== undefined ? parseFloat(s.settings.estCruiseComm) : 40.00; 
+
         if (loggedV.length > 0) { 
             let sum = 0;
             loggedV.forEach(v => {
@@ -2672,9 +2689,11 @@ function getNextPendingMilestone(milestonesList) {
 
                     // Does the document arrival cross paths with THIS payday's cutoff Monday?
                     if (clearanceDate > prevCutoffD && clearanceDate <= currCutoffD) {
-                        milestoneTotal += 300.00; 
+                        let estBonus = s.settings.estMonthlyBonus !== undefined ? parseFloat(s.settings.estMonthlyBonus) : 300.00;
+                        milestoneTotal += estBonus; 
                         hasBonus = true; 
                     }
+
                 }
             }
         }
@@ -4307,8 +4326,17 @@ function renderDeploymentRadar() {
 
     function updateSettingsParams() {
         s.settings.vacationFundTarget = parseFloat(document.getElementById('setVacFundTarget').value) || 2557;
+        
+        let cVal = parseFloat(document.getElementById('setEstComm').value);
+        s.settings.estCruiseComm = isNaN(cVal) ? 40 : cVal;
+        
+        let bVal = parseFloat(document.getElementById('setEstBonus').value);
+        s.settings.estMonthlyBonus = isNaN(bVal) ? 300 : bVal;
+        
         saveState();
+        if (typeof renderContractTracker === 'function') renderContractTracker();
     }
+
 
     async function changeMode() { 
         let newMode = document.getElementById('setMode').value; 
@@ -4368,11 +4396,10 @@ function renderDeploymentRadar() {
         document.getElementById('setVacationStart').value = s.settings.vacationStart;
         document.getElementById('setVacationEnd').value = s.settings.vacationEnd;
         document.getElementById('setVacFundTarget').value = s.settings.vacationFundTarget;
+        
+        document.getElementById('setEstComm').value = s.settings.estCruiseComm !== undefined ? s.settings.estCruiseComm : 40;
+        document.getElementById('setEstBonus').value = s.settings.estMonthlyBonus !== undefined ? s.settings.estMonthlyBonus : 300;
     }
-
-    // ==========================================
-    // 8. PROJECTS & DAILY EXPENSE LOGGING
-    // ==========================================
 
     // ==========================================
     // VENDOR / LOCATION LEDGER ENGINE
