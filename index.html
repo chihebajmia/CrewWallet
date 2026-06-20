@@ -977,10 +977,12 @@
                         </div>
                     </div>
                     
-                    <div class="modal-btn-row" style="margin-top:20px;">
-                        <button class="btn-secondary" onclick="document.getElementById('commissionModal').style.display='none'">Cancel</button>
-                        <button class="v-btn" style="background:#38bdf8; color:#0f172a;" onclick="saveVoyageCommission()">Save</button>
+                    <div class="modal-btn-row" style="margin-top:20px; display:flex; gap:8px;">
+                        <button class="btn-secondary" onclick="document.getElementById('commissionModal').style.display='none'" style="flex:1;">Cancel</button>
+                        <button id="commResetBtn" class="v-btn" style="background:rgba(239, 68, 68, 0.1); color:var(--danger); border:1px solid rgba(239, 68, 68, 0.3); display:none; flex:1;" onclick="resetVoyageCommission()">Undo</button>
+                        <button class="v-btn" style="background:#38bdf8; color:#0f172a; flex:1;" onclick="saveVoyageCommission()">Save</button>
                     </div>
+
                 </div>
             </div>
 
@@ -3435,7 +3437,11 @@ function setPaycheckWizardType(type) {
         document.getElementById('commSales').value = c.salesEfficiency || "";
         document.getElementById('commDreams').value = c.dreamsStudio || "";
         document.getElementById('commHasBonus').checked = c.hasMonthlyBonus === true;
-        
+        let resetBtn = document.getElementById('commResetBtn');
+        if (resetBtn) {
+            resetBtn.style.display = (v.status !== 'pending') ? 'block' : 'none';
+        }
+
         document.getElementById('commissionModal').style.display = 'flex';
     }
 
@@ -3478,6 +3484,37 @@ function setPaycheckWizardType(type) {
         if (typeof renderDashboard === 'function') renderDashboard();
     }
 
+    function resetVoyageCommission() {
+        let vid = document.getElementById('commVoyageId').value;
+        let vIndex = s.contract_profile.voyages.findIndex(x => x.voyageId === vid);
+        if (vIndex === -1) return;
+        
+        let v = s.contract_profile.voyages[vIndex];
+
+        if (v.status === "paid") {
+            alert("⚠️ Cannot undo a paid commission directly. You must go to your Ledger History and delete the Paycheck that sealed this commission first.");
+            return;
+        }
+
+        let confirmReset = confirm("🗑️ Are you sure you want to completely erase this commission and return it to Pending status?");
+        if (!confirmReset) return;
+
+        // Wipe the data and return to pending
+        v.commissions = {
+            salesEfficiency: 0,
+            dreamsStudio: 0,
+            hasMonthlyBonus: false
+        };
+        v.status = "pending";
+        delete v.linkedPaycheckId;
+
+        saveState();
+        document.getElementById('commissionModal').style.display = 'none';
+        renderVoyageLedger();
+        if (typeof renderDashboard === 'function') renderDashboard();
+    }
+
+    
     function deleteVoyage(vid) {
         let v = s.contract_profile.voyages.find(x => x.voyageId === vid);
         if (v && v.status === "paid") {
