@@ -2460,26 +2460,19 @@ let activeWizardType = 'contract';
 function generateContractMilestones() {
     let milestones = [];
     if (!s.settings.contractStart) return milestones;
-    
-    // 1. Establish the Carnival Universal Bi-Weekly Anchor
+
     let globalAnchor = new Date('2026-08-21T05:00:00');
     let cStart = new Date(s.settings.contractStart + 'T05:00:00');
     
-    // 2. Align the start date to the correct 14-day corporate cycle
     let msPer14Days = 14 * 24 * 60 * 60 * 1000;
     let cyclesDiff = Math.floor((cStart.getTime() - globalAnchor.getTime()) / msPer14Days);
     let firstPayday = new Date(globalAnchor.getTime() + (cyclesDiff * msPer14Days));
-    
-    // 3. Enforce the Monday Cutoff Rule
+
     while (true) {
         let cutoffMonday = new Date(firstPayday.getTime());
         cutoffMonday.setDate(cutoffMonday.getDate() - 4);
         cutoffMonday.setHours(0,0,0,0);
-        
-        // You only get paid if your contract starts BEFORE the Monday cutoff
-        if (cutoffMonday > cStart) {
-            break;
-        }
+        if (cutoffMonday > cStart) break;
         firstPayday.setTime(firstPayday.getTime() + msPer14Days);
     }
     
@@ -2487,12 +2480,17 @@ function generateContractMilestones() {
     let currentPayday = new Date(firstPayday.getTime());
     let index = 0;
     
+    let previousCutoffStr = null;
+    let bPay = ((parseFloat(s.contract_profile.baseSalary) || 2113.04) * 12) / 26;
+    
     while (currentPayday <= contractEnd || milestones.length < 12) {
         if (milestones.length >= 22) break;
+        
         let pDate = new Date(currentPayday.getTime());
         let cutoffMonday = new Date(pDate.getTime());
         cutoffMonday.setDate(cutoffMonday.getDate() - 4);
         cutoffMonday.setHours(0,0,0,0);
+        
         let startWindow = new Date(cutoffMonday.getTime());
         startWindow.setDate(startWindow.getDate() - 14);
         
@@ -2506,17 +2504,25 @@ function generateContractMilestones() {
             }
         }
         
+        let cutoffStr = cutoffMonday.toLocaleDateString('en-CA');
+        let commData = getMilestoneCommissions(cutoffStr, previousCutoffStr, s);
+        let projectedTotal = isDryDock ? bPay : (bPay + commData.total);
+
         milestones.push({
             index: index,
             paydayDateStr: pDate.toLocaleDateString('en-CA'),
-            cutoffMondayStr: cutoffMonday.toLocaleDateString('en-CA'),
+            cutoffMondayStr: cutoffStr,
             startDateStr: startWindow.toLocaleDateString('en-CA'),
             isDryDock: isDryDock,
             status: 'pending',
             loggedGross: 0,
             positionSnapshot: '',
-            basePaySnapshot: 0
+            basePaySnapshot: 0,
+            pendingComm: isDryDock ? 0 : commData.total,
+            projectedTotal: projectedTotal
         });
+        
+        previousCutoffStr = cutoffStr;
         currentPayday.setDate(currentPayday.getDate() + 14);
         index++;
     }
@@ -2530,22 +2536,85 @@ function generateContractMilestones() {
             milestones[i].basePaySnapshot = pc.baseSalarySnapshot || 2113.04;
         }
     });
+    
     return milestones;
 }
+
 
 
 function getNextPendingMilestone(milestonesList) {
     return milestonesList.find(m => m.status === 'pending') || null;
 }
 
-function calculatePendingCommissionsForMilestone(milestoneObj) {
-    if (!milestoneObj || milestoneObj.isDryDock) return 0;
-    let cutoffDate = new Date(milestoneObj.cutoffMondayStr + 'T23:59:59');
-    return (s.contract_profile.voyages || []).reduce((sum, v) => {
-        let vDate = new Date(v.dateStr);
-        return (vDate <= cutoffDate) ? sum + (parseFloat(v.estimatedCommission) || 0) : sum;
-    }, 0);
-}
+    function getMilestoneCommissions(currCutoffStr, prevCutoffStr, s) {
+        let currCutoffD = new Date(currCutoffStr + "T23:59:59");
+        let prevCutoffD = prevCutoffStr ? new Date(prevCutoffStr + "T23:59:59") : new Date("2000-01-01T00:00:00");
+
+        let voyages = (s.contract_profile && s.contract_profile.voyages) ? s.contract_profile.voyages : [];
+        
+        // 1. Dynamic Average vs $40.00 Baseline Rule
+        let loggedV = voyages.filter(v => v.status === 'paid' || v.status === 'logged');
+        let avgComm = 40.00; 
+        if (loggedV.length > 0) { 
+            let sum = 0;
+            loggedV.forEach(v => {
+                let c = v.commissions || {};
+                sum += (parseFloat(c.salesEfficiency) || 0) + (parseFloat(c.dreamsStudio) || 0);
+            });
+            avgComm = sum / loggedV.length;
+        }
+
+        let milestoneTotal = 0;
+        let hasBonus = false;
+
+        // 2. Scan Voyages in this specific Cutoff Window
+        voyages.forEach(v => {
+            let vEnd = new Date(v.endDate + "T12:00:00");
+            
+            if (vEnd > prevCutoffD && vEnd <= currCutoffD) {
+                if (v.status === 'paid' || v.status === 'logged') {
+                    let c = v.commissions || {};
+                    milestoneTotal += (parseFloat(c.salesEfficiency) || 0) + (parseFloat(c.dreamsStudio) || 0);
+                    if (c.hasMonthlyBonus) hasBonus = true; 
+                } else {
+                    // Future cruise: use dynamic estimate
+                    milestoneTotal += avgComm;
+                }
+            }
+        });
+
+        // 3. The Future Monthly Bonus Prediction ($300 Conservative)
+        if (!hasBonus) {
+            let monthsMap = {};
+            voyages.forEach(v => {
+                let m = v.endDate.substring(0, 7); 
+                if (!monthsMap[m]) monthsMap[m] = [];
+                monthsMap[m].push(v);
+            });
+
+            for (let m in monthsMap) {
+                let monthHasManualBonus = monthsMap[m].some(v => v.commissions && v.commissions.hasMonthlyBonus === true);
+                
+                if (!monthHasManualBonus) {
+                    monthsMap[m].sort((a,b) => new Date(a.endDate) - new Date(b.endDate));
+                    let lastV = monthsMap[m][monthsMap[m].length - 1];
+                    
+                    // Document arrives on the 2nd day of the next cruise (1 day after this one ends)
+                    let clearanceDate = new Date(lastV.endDate + "T12:00:00");
+                    clearanceDate.setDate(clearanceDate.getDate() + 1);
+
+                    // Does the document arrival cross paths with THIS payday's cutoff Monday?
+                    if (clearanceDate > prevCutoffD && clearanceDate <= currCutoffD) {
+                        milestoneTotal += 300.00; 
+                        hasBonus = true; 
+                    }
+                }
+            }
+        }
+
+        return { total: milestoneTotal };
+    }
+
 
 function renderContractTracker() {
     let container = document.getElementById('contractTrackerWidget');
@@ -2566,47 +2635,28 @@ function renderContractTracker() {
     document.getElementById('uiTotalBankedGross').innerText = `$${totalBanked.toFixed(2)}`;
     
     let nextPending = getNextPendingMilestone(milestones);
-    let pendingCommissions = calculatePendingCommissionsForMilestone(nextPending);
-    document.getElementById('uiPendingCommissionsText').innerText = `$${pendingCommissions.toFixed(2)}`;
-    
-    let historicalCommissions = [];
-    (s.income_logs || []).forEach(log => {
-        if (log.source === 'paycheck' && log.isContractPayday && log.baseSalarySnapshot) {
-            let biweeklyBase = (parseFloat(log.baseSalarySnapshot) * 12) / 26;
-            let comm = parseFloat(log.amount) - biweeklyBase;
-            if (comm > 0) historicalCommissions.push(comm);
-        }
-    });
-    
-    let avgCommission = 60;
-    if (historicalCommissions.length > 0) {
-        avgCommission = historicalCommissions.reduce((a, b) => a + b, 0) / historicalCommissions.length;
-    } else if (s.contract_profile.voyages && s.contract_profile.voyages.length > 0) {
-        avgCommission = s.contract_profile.voyages.reduce((sum, v) => sum + (parseFloat(v.estimatedCommission) || 0), 0) / s.contract_profile.voyages.length;
+    if (nextPending) {
+        document.getElementById('uiPendingCommissionsText').innerText = `$${nextPending.pendingComm.toFixed(2)}`;
+    } else {
+        document.getElementById('uiPendingCommissionsText').innerText = `$0.00`;
     }
         
     let projectedRemainder = 0;
     milestones.forEach(m => {
-        if (m.status === 'pending') {
-            let biweeklyBase = ((parseFloat(s.contract_profile.baseSalary) || 2113.04) * 12) / 26;
-            if (m.isDryDock) { projectedRemainder += biweeklyBase; }
-            else if (nextPending && m.index === nextPending.index) { projectedRemainder += (biweeklyBase + pendingCommissions); }
-            else { projectedRemainder += (biweeklyBase + avgCommission); }
-        }
+        if (m.status === 'pending') projectedRemainder += m.projectedTotal;
     });
     document.getElementById('uiProjectedRemainder').innerText = `$${projectedRemainder.toFixed(2)}`;
     
     let html = '';
     let distantHtml = '';
+    
     milestones.forEach(m => {
         let cl = m.status === 'cleared' ? 'color:var(--success);' : 'color:var(--text-muted);';
         let badge = m.status === 'cleared' 
             ? `<span class="cat-badge" style="background:var(--success); color:#000;">✅ Banked</span>` 
             : (m.isDryDock ? `<span class="cat-badge" style="background:var(--danger)">⚓ Dry Dock</span>` : `<span class="cat-badge">⏳ Projected</span>`);
             
-        let valueText = m.status === 'cleared' 
-            ? `$${m.loggedGross.toFixed(2)}` 
-            : (m.isDryDock ? `$${(((parseFloat(s.contract_profile.baseSalary)||2113.04)*12)/26).toFixed(2)}` : `~$${(((parseFloat(s.contract_profile.baseSalary)||2113.04)*12)/26 + avgCommission).toFixed(2)}`);
+        let valueText = m.status === 'cleared' ? `$${m.loggedGross.toFixed(2)}` : `~$${m.projectedTotal.toFixed(2)}`;
             
         let rowTemplate = `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px; border-bottom:1px solid rgba(255,255,255,0.03); font-size:11px; ${cl}">
                     <div>
@@ -2630,7 +2680,6 @@ function renderContractTracker() {
     
     document.getElementById('milestoneTimelineLedger').innerHTML = html;
 }
-
 
 async function updatePositionProfile() {
     let title = await openUPrompt("Update Position Title", "Enter your active rank / assignment title:", s.contract_profile.positionTitle);
@@ -3748,46 +3797,18 @@ function setPaycheckWizardType(type) {
     // ==========================================
     // V2 ZERO-BLOAT RADAR ENGINE
     // ==========================================
-    function renderDeploymentRadar() {
-        let widget = document.getElementById('deploymentRadarWidget');
-        if (!widget) return;
-        
-        if (s.mode !== 'onboard') {
-            widget.style.display = 'none';
-            return;
-        }
-        widget.style.display = 'block';
+function renderDeploymentRadar() {
+    let widget = document.getElementById('deploymentRadarWidget');
+    if (!widget) return;
+    if (s.mode !== 'onboard') { widget.style.display = 'none'; return; }
+    widget.style.display = 'block';
 
-        // 1. Calculate Projected Gross Remainder (via existing Milestones)
-        let milestones = generateContractMilestones();
-        let nextPending = getNextPendingMilestone(milestones);
-        let pendingCommissions = calculatePendingCommissionsForMilestone(nextPending);
-        
-        let historicalCommissions = [];
-        (s.income_logs || []).forEach(log => {
-            if (log.source === 'paycheck' && log.isContractPayday && log.baseSalarySnapshot) {
-                let biweeklyBase = (parseFloat(log.baseSalarySnapshot) * 12) / 26;
-                let comm = parseFloat(log.amount) - biweeklyBase;
-                if (comm > 0) historicalCommissions.push(comm);
-            }
-        });
-        
-        let avgCommission = 60;
-        if (historicalCommissions.length > 0) {
-            avgCommission = historicalCommissions.reduce((a, b) => a + b, 0) / historicalCommissions.length;
-        } else if (s.contract_profile.voyages && s.contract_profile.voyages.length > 0) {
-            avgCommission = s.contract_profile.voyages.reduce((sum, v) => sum + (parseFloat(v.estimatedCommission) || 0), 0) / s.contract_profile.voyages.length;
-        }
-            
-        let projectedGross = 0;
-        milestones.forEach(m => {
-            if (m.status === 'pending') {
-                let biweeklyBase = ((parseFloat(s.contract_profile.baseSalary) || 2113.04) * 12) / 26;
-                if (m.isDryDock) { projectedGross += biweeklyBase; }
-                else if (nextPending && m.index === nextPending.index) { projectedGross += (biweeklyBase + pendingCommissions); }
-                else { projectedGross += (biweeklyBase + avgCommission); }
-            }
-        });
+    // 1. Calculate Projected Gross Remainder (via existing Milestones)
+    let milestones = generateContractMilestones();
+    let projectedGross = 0;
+    milestones.forEach(m => {
+        if (m.status === 'pending') projectedGross += m.projectedTotal;
+    });
 
         // 2. Apply the Smart Paycheck Wizard's Operation Split
         let opPct = s.contract_profile.lastOpPct !== undefined ? parseFloat(s.contract_profile.lastOpPct) : 45;
